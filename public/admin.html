@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>inline — operator console</title>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     ADMIN / OPERATOR APP
+
+     One self-contained file. Edit the :root variables below to restyle.
+     The "add guest" form and the queue columns build themselves from
+     config.json (queue_types + fields) — so to add a field or a queue
+     type you edit config.json, NOT this file.
+     ════════════════════════════════════════════════════════════════════ -->
+
+<style>
+  :root {
+    /* ── 🎨 EDIT YOUR THEME HERE ─────────────────────────────────────── */
+    --bg:        #f1f5f9;
+    --panel:     #ffffff;
+    --text:      #0f172a;
+    --muted:     #64748b;
+    --line:      #e2e8f0;
+    --primary:   #6366f1;
+    --primary-text: #ffffff;
+    --good:      #16a34a;
+    --warn:      #d97706;
+    --danger:    #dc2626;
+    --radius:    16px;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    /* ────────────────────────────────────────────────────────────────── */
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); }
+
+  header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { font-size: 1.2rem; }
+  header .sub { color: var(--muted); font-size: .82rem; }
+  header .right { display: flex; align-items: center; gap: 10px; }
+
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 20px; display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
+  @media (max-width: 820px) { .wrap { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+  .panel h2 { font-size: 1rem; margin-bottom: 14px; }
+
+  label.fld { display: block; font-size: .82rem; color: var(--muted); margin: 12px 0 5px; font-weight: 600; }
+  label.fld .req { color: var(--danger); }
+  input, select, textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--line);
+    border-radius: 10px; font: inherit; background: #fff; color: var(--text);
+  }
+  textarea { resize: vertical; min-height: 64px; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); outline-offset: 0; border-color: var(--primary); }
+
+  .types { display: flex; flex-wrap: wrap; gap: 8px; }
+  .type-btn {
+    flex: 1 1 calc(50% - 8px); cursor: pointer; text-align: left;
+    border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #fff;
+  }
+  .type-btn .code { font-weight: 800; color: var(--primary); }
+  .type-btn .nm { font-size: .82rem; }
+  .type-btn .ds { font-size: .72rem; color: var(--muted); }
+  .type-btn.sel { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
+
+  button { font: inherit; cursor: pointer; border: none; border-radius: 10px; }
+  .btn-primary { background: var(--primary); color: var(--primary-text); padding: 12px 16px; width: 100%; font-weight: 700; margin-top: 16px; }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-sm { padding: 6px 10px; font-size: .8rem; font-weight: 600; }
+  .btn-ghost { background: #f1f5f9; color: var(--text); }
+  .btn-good { background: #dcfce7; color: var(--good); }
+  .btn-warn { background: #fef3c7; color: var(--warn); }
+  .btn-danger { background: #fee2e2; color: var(--danger); }
+
+  /* result card after adding a guest */
+  .result { text-align: center; }
+  .result .big { font-size: 3.2rem; font-weight: 800; color: var(--primary); margin: 4px 0; }
+  .result img { width: 200px; height: 200px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:8px; }
+  .linkrow { display: flex; gap: 8px; margin: 14px 0 6px; }
+  .linkrow input { font-size: .8rem; }
+
+  /* board */
+  .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+  .col { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
+  .col-head { padding: 14px; border-bottom: 1px solid var(--line); }
+  .col-head .nm { font-weight: 700; }
+  .col-head .ds { font-size: .76rem; color: var(--muted); }
+  .serving-now { margin-top: 10px; background: #f8fafc; border-radius: 12px; padding: 10px; text-align: center; }
+  .serving-now .lbl { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .serving-now .val { font-size: 2rem; font-weight: 800; color: var(--good); font-variant-numeric: tabular-nums; }
+  .col-actions { display: flex; gap: 8px; padding: 0 14px 12px; }
+  .col-actions .btn-primary { margin-top: 0; }
+
+  .list { padding: 6px 10px 12px; display: flex; flex-direction: column; gap: 8px; max-height: 460px; overflow-y: auto; }
+  .group-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 8px 4px 2px; }
+  .q-entry { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+  .q-entry.serving { border-color: var(--good); background: #f0fdf4; }
+  .q-entry.skipped, .q-entry.no_show { opacity: .8; background: #fffbeb; border-color: #fde68a; }
+  .q-num { font-weight: 800; color: var(--primary); font-variant-numeric: tabular-nums; min-width: 42px; }
+  .q-info { flex: 1; min-width: 0; }
+  .q-title { font-weight: 600; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .q-sub { font-size: .75rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .q-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .empty-note { color: var(--muted); font-size: .85rem; padding: 14px 4px; text-align: center; }
+
+  .pill-live { display: inline-flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #cbd5e1; }
+  .dot.live { background: var(--good); }
+
+  /* login overlay */
+  .overlay { position: fixed; inset: 0; background: rgba(15,23,42,.6); display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+  .overlay.show { display: flex; }
+  .login { background: var(--panel); border-radius: var(--radius); padding: 26px; width: 100%; max-width: 360px; }
+  .login h2 { margin-bottom: 6px; }
+  .login p { color: var(--muted); font-size: .85rem; margin-bottom: 14px; }
+  .login .err { color: var(--danger); font-size: .82rem; margin-top: 8px; min-height: 1em; }
+
+  /* toast */
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: .85rem; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+
+  .danger-zone { margin-top: 20px; text-align: right; }
+  .danger-zone button { background: transparent; color: var(--danger); font-size: .8rem; text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1 id="brand">inline</h1>
+    <div class="sub">Operator console</div>
+  </div>
+  <div class="right">
+    <span class="pill-live"><span class="dot" id="liveDot"></span><span id="liveText">connecting…</span></span>
+    <button class="btn-sm btn-ghost" id="signout" hidden>Sign out</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- ── Add guest ─────────────────────────────────────────────── -->
+  <section class="panel" id="addPanel">
+    <h2>Add to queue</h2>
+
+    <div id="formView">
+      <label class="fld">Queue type</label>
+      <div class="types" id="typeButtons"></div>
+
+      <form id="guestForm" autocomplete="off">
+        <div id="fields"></div>
+        <button type="submit" class="btn-primary" id="addBtn">Add to queue</button>
+      </form>
+    </div>
+
+    <!-- shown after a successful add -->
+    <div id="resultView" class="result" hidden>
+      <div style="color:var(--muted);font-size:.82rem;font-weight:600;">Added — give this to the guest</div>
+      <div class="big" id="resLabel">A01</div>
+      <img id="resQr" alt="QR code" />
+      <div class="linkrow">
+        <input id="resLink" readonly />
+        <button class="btn-sm btn-ghost" id="copyBtn">Copy</button>
+      </div>
+      <button class="btn-primary" id="againBtn">Add another</button>
+    </div>
+  </section>
+
+  <!-- ── Live board ────────────────────────────────────────────── -->
+  <section>
+    <div class="board" id="board"></div>
+    <div class="danger-zone">
+      <button id="resetAll">Reset everything</button>
+    </div>
+  </section>
+</div>
+
+<!-- login overlay -->
+<div class="overlay" id="overlay">
+  <div class="login">
+    <h2>Operator sign in</h2>
+    <p>Enter the operator password (the <code>ADMIN_TOKEN</code> from your .env).</p>
+    <input type="password" id="tokenInput" placeholder="Password" />
+    <button class="btn-primary" id="unlockBtn">Unlock</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  /* ── ⚙️ CONFIG ──────────────────────────────────────────────────────
+     Leave API_BASE empty when this page is served by the inline backend. */
+  const API_BASE = "";
+  /* ──────────────────────────────────────────────────────────────────── */
+
+  const $ = (x) => document.getElementById(x);
+  const TOKEN_KEY = "inline_admin_token";
+  let CONFIG = null;
+  let selectedType = null;
+  let token = localStorage.getItem(TOKEN_KEY) || "";
+
+  // ── small helpers ──────────────────────────────────────────────────
+  function toast(msg) {
+    const t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2200);
+  }
+  function authHeaders(extra) {
+    const h = Object.assign({}, extra || {});
+    if (token) h["Authorization"] = "Bearer " + token;
+    return h;
+  }
+  async function apiGet(path) {
+    const res = await fetch(API_BASE + path, { headers: authHeaders() });
+    if (res.status === 401) { handle401(); throw new Error("unauthorized"); }
+    return res.json();
+  }
+  async function apiSend(path, method, body) {
+    const res = await fetch(API_BASE + path, {
+      method,
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (res.status === 401) { handle401(); throw new Error("unauthorized"); }
+    if (!res.ok) { toast("Error: " + (await res.text())); throw new Error("request failed"); }
+    return res.json();
+  }
+
+  // ── auth ───────────────────────────────────────────────────────────
+  function showLogin(err) {
+    $("overlay").classList.add("show");
+    $("loginErr").textContent = err || "";
+    $("tokenInput").focus();
+  }
+  function hideLogin() { $("overlay").classList.remove("show"); }
+  function handle401() {
+    token = ""; localStorage.removeItem(TOKEN_KEY);
+    $("signout").hidden = true;
+    showLogin("That password didn't work — try again.");
+  }
+  $("unlockBtn").onclick = async () => {
+    token = $("tokenInput").value.trim();
+    localStorage.setItem(TOKEN_KEY, token);
+    // verify by hitting a protected endpoint
+    try { await apiGet("/api/entries"); hideLogin(); $("signout").hidden = false; loadBoard(); }
+    catch (_) { /* handle401 already showed the error */ }
+  };
+  $("tokenInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("unlockBtn").click(); });
+  $("signout").onclick = () => { handle401(); };
+
+  // ── add-guest form (built from config) ──────────────────────────────
+  function renderTypeButtons() {
+    const box = $("typeButtons"); box.innerHTML = "";
+    CONFIG.queue_types.forEach((t, i) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "type-btn" + (i === 0 ? " sel" : "");
+      b.innerHTML = `<div class="code">${t.code}</div><div class="nm">${t.name || ""}</div><div class="ds">${t.description || ""}</div>`;
+      b.onclick = () => {
+        selectedType = t.code;
+        [...box.children].forEach((c) => c.classList.remove("sel"));
+        b.classList.add("sel");
+      };
+      box.appendChild(b);
+    });
+    selectedType = CONFIG.queue_types[0] ? CONFIG.queue_types[0].code : null;
+  }
+
+  function renderFields() {
+    const box = $("fields"); box.innerHTML = "";
+    CONFIG.fields.forEach((f) => {
+      const label = document.createElement("label");
+      label.className = "fld";
+      label.innerHTML = `${f.label}${f.required ? ' <span class="req">*</span>' : ""}`;
+      box.appendChild(label);
+
+      let input;
+      if (f.type === "textarea") {
+        input = document.createElement("textarea");
+      } else if (f.type === "select") {
+        input = document.createElement("select");
+        const blank = document.createElement("option"); blank.value = ""; blank.textContent = "— choose —";
+        input.appendChild(blank);
+        (f.options || []).forEach((o) => { const op = document.createElement("option"); op.value = o; op.textContent = o; input.appendChild(op); });
+      } else {
+        input = document.createElement("input");
+        input.type = f.type || "text";
+      }
+      input.id = "f_" + f.key;
+      input.dataset.key = f.key;
+      input.dataset.required = f.required ? "1" : "";
+      box.appendChild(input);
+    });
+  }
+
+  $("guestForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!selectedType) { toast("Pick a queue type"); return; }
+    const fields = {};
+    for (const el of $("fields").querySelectorAll("[data-key]")) {
+      const val = el.value.trim();
+      if (el.dataset.required && !val) { toast("Please fill in all required fields"); el.focus(); return; }
+      if (val !== "") fields[el.dataset.key] = val;
+    }
+    $("addBtn").disabled = true;
+    try {
+      const r = await apiSend("/api/entries", "POST", { type_code: selectedType, fields });
+      showResult(r);
+    } finally { $("addBtn").disabled = false; }
+  });
+
+  function customerLink(r) {
+    // Prefer the configured public URL; otherwise fall back to this origin.
+    const base = (CONFIG.public_url && CONFIG.public_url.trim()) || window.location.origin;
+    return base.replace(/\/$/, "") + r.customer_path;
+  }
+  function showResult(r) {
+    const link = customerLink(r);
+    $("resLabel").textContent = r.entry.label;
+    $("resLink").value = link;
+    $("resQr").src = API_BASE + "/api/qr?data=" + encodeURIComponent(link);
+    $("formView").hidden = true;
+    $("resultView").hidden = false;
+  }
+  $("copyBtn").onclick = async () => {
+    try { await navigator.clipboard.writeText($("resLink").value); toast("Link copied"); }
+    catch (_) { $("resLink").select(); document.execCommand("copy"); toast("Link copied"); }
+  };
+  $("againBtn").onclick = () => {
+    $("guestForm").reset();
+    $("resultView").hidden = true;
+    $("formView").hidden = false;
+  };
+
+  // ── operator board ──────────────────────────────────────────────────
+  function summarize(e) {
+    const f = e.fields || {};
+    const defs = CONFIG.fields || [];
+    let title = "Guest";
+    const subs = [];
+    defs.forEach((d, i) => {
+      const v = f[d.key];
+      if (v === undefined || v === null || v === "") return;
+      if (i === 0) title = v; else subs.push(v);
+    });
+    if (title === "Guest" && subs.length) title = subs.shift();
+    return { title, sub: subs.join(" · ") };
+  }
+
+  function entryEl(e) {
+    const { title, sub } = summarize(e);
+    const el = document.createElement("div");
+    el.className = "q-entry " + e.status;
+    const actions = actionButtons(e);
+    el.innerHTML =
+      `<div class="q-num">${e.label}</div>` +
+      `<div class="q-info"><div class="q-title">${escapeHtml(title)}</div>` +
+      (sub ? `<div class="q-sub">${escapeHtml(sub)}</div>` : "") + `</div>` +
+      `<div class="q-actions"></div>`;
+    const box = el.querySelector(".q-actions");
+    actions.forEach(([txt, cls, status]) => {
+      const b = document.createElement("button");
+      b.className = "btn-sm " + cls; b.textContent = txt;
+      b.onclick = () => act(e.id, status);
+      box.appendChild(b);
+    });
+    return el;
+  }
+
+  function actionButtons(e) {
+    switch (e.status) {
+      case "waiting": return [["Serve", "btn-good", "serving"], ["Skip", "btn-warn", "skipped"]];
+      case "serving": return [["Done", "btn-good", "done"], ["Skip", "btn-warn", "skipped"]];
+      case "skipped": return [["Recall", "btn-ghost", "waiting"], ["No-show", "btn-danger", "no_show"]];
+      case "no_show": return [["Recall", "btn-ghost", "waiting"]];
+      default: return [];
+    }
+  }
+
+  async function act(id, status) {
+    await apiSend("/api/entries/" + encodeURIComponent(id) + "/status", "POST", { status });
+    // board refreshes via the SSE nudge; refresh now too for snappiness
+    loadBoard();
+  }
+
+  async function callNext(code) {
+    const r = await apiSend("/api/queue/" + encodeURIComponent(code) + "/next", "POST");
+    toast(r.called ? "Called next" : "No one waiting");
+    loadBoard();
+  }
+
+  async function resetType(code) {
+    if (!confirm("Clear queue " + code + " and reset its numbers?")) return;
+    await apiSend("/api/queue/" + encodeURIComponent(code) + "/reset", "POST");
+    loadBoard();
+  }
+
+  $("resetAll").onclick = async () => {
+    if (!confirm("Clear ALL queues and reset every number? This cannot be undone.")) return;
+    await apiSend("/api/reset", "POST");
+    loadBoard();
+  };
+
+  function renderBoard(data) {
+    const board = $("board"); board.innerHTML = "";
+    const byType = {};
+    CONFIG.queue_types.forEach((t) => (byType[t.code] = []));
+    (data.entries || []).forEach((e) => { (byType[e.type_code] = byType[e.type_code] || []).push(e); });
+    const stateByCode = {};
+    (data.state || []).forEach((s) => (stateByCode[s.code] = s));
+
+    CONFIG.queue_types.forEach((t) => {
+      const entries = byType[t.code] || [];
+      const serving = entries.filter((e) => e.status === "serving");
+      const waiting = entries.filter((e) => e.status === "waiting").sort((a, b) => a.number - b.number);
+      const held = entries.filter((e) => e.status === "skipped" || e.status === "no_show");
+      const doneCount = entries.filter((e) => e.status === "done").length;
+      const st = stateByCode[t.code] || {};
+
+      const col = document.createElement("div");
+      col.className = "col";
+      col.innerHTML =
+        `<div class="col-head">
+           <div class="nm">${t.code} · ${escapeHtml(t.name || "")}</div>
+           <div class="ds">${escapeHtml(t.description || "")}</div>
+           <div class="serving-now"><div class="lbl">Now serving</div><div class="val">${st.current_serving || "—"}</div></div>
+         </div>
+         <div class="col-actions">
+           <button class="btn-primary btn-next">Call next (${waiting.length})</button>
+           <button class="btn-sm btn-ghost btn-reset" title="Reset this queue">↺</button>
+         </div>
+         <div class="list"></div>`;
+      col.querySelector(".btn-next").onclick = () => callNext(t.code);
+      col.querySelector(".btn-reset").onclick = () => resetType(t.code);
+
+      const list = col.querySelector(".list");
+      const addGroup = (label, arr) => {
+        if (!arr.length) return;
+        const g = document.createElement("div"); g.className = "group-label"; g.textContent = label;
+        list.appendChild(g);
+        arr.forEach((e) => list.appendChild(entryEl(e)));
+      };
+      addGroup("Serving", serving);
+      addGroup("Waiting", waiting);
+      addGroup("On hold", held);
+
+      if (!serving.length && !waiting.length && !held.length) {
+        const n = document.createElement("div"); n.className = "empty-note";
+        n.textContent = doneCount ? `All done (${doneCount} served)` : "No one in this queue yet";
+        list.appendChild(n);
+      }
+      board.appendChild(col);
+    });
+  }
+
+  async function loadBoard() {
+    try { renderBoard(await apiGet("/api/entries")); } catch (_) {}
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // ── live updates ────────────────────────────────────────────────────
+  function setLive(on) {
+    $("liveDot").className = "dot" + (on ? " live" : "");
+    $("liveText").textContent = on ? "live" : "offline";
+  }
+  function connect() {
+    try {
+      const es = new EventSource(API_BASE + "/api/events");
+      es.onopen = () => setLive(true);
+      es.onmessage = () => loadBoard();
+      es.onerror = () => setLive(false);
+    } catch (_) { setLive(false); }
+  }
+
+  // ── boot ────────────────────────────────────────────────────────────
+  (async function init() {
+    try { CONFIG = await (await fetch(API_BASE + "/api/config")).json(); }
+    catch (_) { toast("Cannot reach backend"); return; }
+
+    $("brand").textContent = CONFIG.brand || "inline";
+    document.title = (CONFIG.brand || "inline") + " — operator";
+    renderTypeButtons();
+    renderFields();
+
+    if (CONFIG.auth_required && !token) { showLogin(); }
+    else { if (token) $("signout").hidden = false; loadBoard(); }
+
+    connect();
+    setInterval(loadBoard, 30000); // safety refresh
+  })();
+</script>
+</body>
+</html>

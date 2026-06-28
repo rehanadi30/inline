@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Your queue ticket</title>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     CUSTOMER APP  (the screen guests see on their phone)
+
+     This is ONE self-contained file. To restyle it you only need to edit
+     the variables in the :root block right below — colours, fonts, radius,
+     background. To change wording, edit the small text strings further down.
+     No build step, no framework.
+     ════════════════════════════════════════════════════════════════════ -->
+
+<style>
+  :root {
+    /* ── 🎨 EDIT YOUR THEME HERE ─────────────────────────────────────── */
+    --bg:           #0f172a;   /* page background                          */
+    --bg-accent:    #1e293b;   /* subtle gradient partner for --bg         */
+    --card:         #ffffff;   /* the ticket card                          */
+    --text:         #0f172a;   /* main text on the card                    */
+    --muted:        #64748b;   /* secondary text                           */
+    --primary:      #6366f1;   /* brand / accent colour                    */
+    --primary-text: #ffffff;   /* text on top of --primary                 */
+    --good:         #16a34a;   /* "it's your turn" colour                  */
+    --warn:         #d97706;   /* skipped / attention colour               */
+    --radius:       22px;      /* corner roundness                         */
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+    /* Optional full-page background image. Paste a URL between the quotes. */
+    --bg-image: none;          /* e.g. url("https://.../photo.jpg")        */
+    /* ────────────────────────────────────────────────────────────────── */
+  }
+
+  /* You usually won't need to touch anything below this line. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--font);
+    color: var(--text);
+    background: var(--bg-image), linear-gradient(160deg, var(--bg), var(--bg-accent));
+    background-size: cover;
+    background-position: center;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .brand {
+    color: #fff;
+    text-align: center;
+    margin-bottom: 18px;
+    text-shadow: 0 1px 12px rgba(0,0,0,.35);
+  }
+  .brand h1 { font-size: 1.5rem; letter-spacing: .5px; }
+  .brand p  { opacity: .8; font-size: .95rem; margin-top: 4px; }
+
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: 0 20px 60px rgba(0,0,0,.30);
+    width: 100%;
+    max-width: 420px;
+    padding: 32px 28px 26px;
+    text-align: center;
+    animation: rise .5s ease;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px);} to {opacity:1; transform:none;} }
+
+  .type-name { color: var(--muted); font-size: .95rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+  .label {
+    font-size: 5.5rem;
+    font-weight: 800;
+    line-height: 1.05;
+    margin: 6px 0 4px;
+    color: var(--primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pill {
+    display: inline-block;
+    padding: 7px 16px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: .9rem;
+    margin: 8px 0 22px;
+    background: #eef2ff; color: var(--primary);
+  }
+  .pill.good { background: #dcfce7; color: var(--good); }
+  .pill.warn { background: #fef3c7; color: var(--warn); }
+  .pill.muted{ background: #f1f5f9; color: var(--muted); }
+
+  .stats { display: flex; gap: 14px; }
+  .stat {
+    flex: 1;
+    background: #f8fafc;
+    border: 1px solid #eef2f7;
+    border-radius: 16px;
+    padding: 16px 10px;
+  }
+  .stat .num { font-size: 2rem; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+  .stat .lbl { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+
+  .headline {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 18px;
+    color: var(--text);
+    min-height: 1.4em;
+  }
+  .headline.turn { color: var(--good); font-size: 1.25rem; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{ transform: scale(1);} 50%{ transform: scale(1.04);} }
+
+  .foot { margin-top: 18px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: .8rem; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1; }
+  .dot.live { background: var(--good); box-shadow: 0 0 0 0 rgba(22,163,74,.5); animation: ring 2s infinite; }
+  @keyframes ring { 0%{box-shadow:0 0 0 0 rgba(22,163,74,.45);} 70%{box-shadow:0 0 0 8px rgba(22,163,74,0);} 100%{box-shadow:0 0 0 0 rgba(22,163,74,0);} }
+
+  .empty { color:#fff; text-align:center; max-width: 340px; }
+  .empty h2 { margin-bottom: 8px; }
+  .empty p { opacity:.85; }
+</style>
+</head>
+<body>
+
+  <!-- ▼▼ DROP EXTRA COMPONENTS / LOGO HERE if you like ▼▼ -->
+  <div class="brand">
+    <h1 id="brand">inline</h1>
+    <p id="tagline">Please wait for your number</p>
+  </div>
+
+  <main id="card" class="card" hidden>
+    <div class="type-name" id="typeName">—</div>
+    <div class="label" id="label">—</div>
+    <div class="pill" id="statusPill">—</div>
+
+    <div class="headline" id="headline"></div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="num" id="nowServing">—</div>
+        <div class="lbl">Now serving</div>
+      </div>
+      <div class="stat">
+        <div class="num" id="ahead">—</div>
+        <div class="lbl">Ahead of you</div>
+      </div>
+    </div>
+
+    <div class="foot">
+      <span class="dot" id="liveDot"></span>
+      <span id="liveText">connecting…</span>
+    </div>
+  </main>
+
+  <div id="empty" class="empty" hidden>
+    <h2>No ticket found</h2>
+    <p>Please scan the QR code or open the link the staff gave you.</p>
+  </div>
+
+<script>
+  /* ── ⚙️ CONFIG ──────────────────────────────────────────────────────
+     Leave API_BASE empty if this page is served by the inline backend.
+     If you host this HTML somewhere else, point it at the backend, e.g.
+     const API_BASE = "https://queue.example.com";                        */
+  const API_BASE = "";
+  /* ──────────────────────────────────────────────────────────────────── */
+
+  // Wording for each status — tweak freely.
+  const TEXT = {
+    next:    "You're next — get ready!",
+    ahead:   (n) => `${n} ${n === 1 ? "group is" : "groups are"} ahead of you`,
+    turn:    "It's your turn — please come to the counter",
+    done:    "Thank you! Your visit is complete.",
+    skipped: "Your number was skipped — please see the staff.",
+    no_show: "Marked as no-show — please see the staff.",
+  };
+
+  const id = new URLSearchParams(location.search).get("id");
+  const $ = (x) => document.getElementById(x);
+
+  async function loadConfig() {
+    try {
+      const c = await (await fetch(API_BASE + "/api/config")).json();
+      if (c.brand)   { $("brand").textContent = c.brand; document.title = c.brand + " — your ticket"; }
+      if (c.tagline) { $("tagline").textContent = c.tagline; }
+    } catch (_) { /* keep defaults */ }
+  }
+
+  function setLive(on) {
+    $("liveDot").className = "dot" + (on ? " live" : "");
+    $("liveText").textContent = on ? "live — updates automatically" : "reconnecting…";
+  }
+
+  function render(v) {
+    $("card").hidden = false;
+    $("typeName").textContent = v.type_name || v.type_code;
+    $("label").textContent = v.label;
+    $("nowServing").textContent = v.current_serving || "—";
+    $("ahead").textContent = v.status === "waiting" ? v.ahead : "—";
+
+    const pill = $("statusPill");
+    const head = $("headline");
+    head.className = "headline";
+
+    switch (v.status) {
+      case "waiting":
+        pill.className = "pill"; pill.textContent = "Waiting";
+        head.textContent = v.ahead === 0 ? TEXT.next : TEXT.ahead(v.ahead);
+        break;
+      case "serving":
+        pill.className = "pill good"; pill.textContent = "Your turn";
+        head.className = "headline turn"; head.textContent = TEXT.turn;
+        break;
+      case "done":
+        pill.className = "pill muted"; pill.textContent = "Done";
+        head.textContent = TEXT.done;
+        break;
+      case "skipped":
+        pill.className = "pill warn"; pill.textContent = "Skipped";
+        head.textContent = TEXT.skipped;
+        break;
+      case "no_show":
+        pill.className = "pill warn"; pill.textContent = "No-show";
+        head.textContent = TEXT.no_show;
+        break;
+    }
+  }
+
+  async function refresh() {
+    if (!id) return;
+    try {
+      const res = await fetch(API_BASE + "/api/entries/" + encodeURIComponent(id));
+      if (!res.ok) { showEmpty(); return; }
+      render(await res.json());
+    } catch (_) { /* transient; SSE or poll will retry */ }
+  }
+
+  function showEmpty() {
+    $("card").hidden = true;
+    $("empty").hidden = false;
+  }
+
+  // Live updates: a single SSE stream nudges us; we then refetch our status.
+  // EventSource reconnects on its own, so this stays robust on flaky mobile.
+  function connect() {
+    try {
+      const es = new EventSource(API_BASE + "/api/events");
+      es.onopen = () => setLive(true);
+      es.onmessage = () => refresh();
+      es.onerror = () => setLive(false);
+    } catch (_) { setLive(false); }
+  }
+
+  // Safety net in case a nudge is ever missed (very light: every 30s).
+  setInterval(refresh, 30000);
+
+  if (!id) {
+    showEmpty();
+  } else {
+    loadConfig();
+    refresh();
+    connect();
+  }
+</script>
+</body>
+</html>

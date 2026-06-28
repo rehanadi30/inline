@@ -1,0 +1,19 @@
+{
+  "brand": "inline",
+  "tagline": "Please wait for your number",
+
+  "_comment_queue_types": "Each queue type has its own running number. 'code' becomes the label prefix (A -> A01, A02 ...). Add/remove freely.",
+  "queue_types": [
+    { "code": "A", "name": "Small table", "description": "1–2 guests" },
+    { "code": "B", "name": "Medium table", "description": "3–5 guests" },
+    { "code": "C", "name": "Large table", "description": "6+ guests" }
+  ],
+
+  "_comment_fields": "The admin 'add guest' form is built from this list. type can be text|tel|number|email|textarea|select. Add 'options' for select. Add/remove freely.",
+  "fields": [
+    { "key": "name", "label": "Name", "type": "text", "required": true },
+    { "key": "phone", "label": "Phone number", "type": "tel", "required": false },
+    { "key": "party_size", "label": "Party size", "type": "number", "required": false },
+    { "key": "notes", "label": "Notes", "type": "textarea", "required": false }
+  ]
+}

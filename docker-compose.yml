@@ -1,0 +1,21 @@
+services:
+  inline:
+    build: .
+    image: inline
+    container_name: inline
+    ports:
+      - "8080:8080"
+    # Loads your settings (copy .env.example to .env first). Optional.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Persist queue state on a mounted volume (survives container rebuilds).
+      INLINE_DATA_FILE: /app/data/data.json
+    volumes:
+      # Edit the HTML / config live without rebuilding the image:
+      - ./public:/app/public
+      - ./config.json:/app/config.json
+      # Queue state lives here on the host:
+      - ./data:/app/data
+    restart: unless-stopped
