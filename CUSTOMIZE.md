@@ -11,6 +11,7 @@ want to change — from colours to swapping out the whole storage layer.
 - [6. Swap the message broker (scale out)](#6-swap-the-message-broker-scale-out)
 - [7. Swap the storage (SQLite/Postgres)](#7-swap-the-storage-sqlitepostgres)
 - [8. Production hardening](#8-production-hardening)
+- [9. Customer notifications](#9-customer-notifications)
 
 ---
 
@@ -237,3 +238,33 @@ let cors = CorsLayer::new()
 CORS entirely.)
 
 **Back up `data.json`** (or your DB) if the live queue matters to you.
+
+---
+
+## 9. Customer notifications
+
+The customer app can pop a browser notification when a guest is **next** and
+when it's **their turn** — works in Chrome, Edge, Firefox, and Android Chrome
+(which needs the included Service Worker, `public/sw.js`, already wired up).
+
+For the guest:
+- A **"🔔 Notify me when it's my turn"** button appears on their ticket.
+- Tapping it asks for permission; once granted, the choice is remembered.
+- Alerts are driven by the existing SSE stream — no polling.
+
+**Requirements**
+- A **secure context**: notifications + service workers only work over
+  **HTTPS**, or `http://localhost` for local testing. Plain `http://<LAN-IP>`
+  will silently not offer notifications — front it with TLS (see §8).
+- The alert fires while the ticket page is open (including a backgrounded tab
+  on desktop). Mobile browsers may suspend a fully backgrounded tab, so
+  delivery there is best-effort.
+
+**Alerts when the app is completely closed?**
+That needs **Web Push** (VAPID): generate VAPID keys, subscribe the browser
+(`registration.pushManager.subscribe`), store the subscription server-side, and
+POST pushes to it. The `push` handler in `public/sw.js` is already in place —
+you only add the server-side sender. Optional, beyond the default setup.
+
+To reword the notifications, edit `NOTIFY_TEXT` near the top of the `<script>`
+in `public/index.html`.

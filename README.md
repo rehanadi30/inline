@@ -5,9 +5,13 @@ binary serves a JSON API, a real-time event stream, and two
 **single-file web apps**:
 
 - **Admin / operator app** — add guests with a flexible form, hand them a
-  link or QR code, and run the line (call next, skip, recall…).
+  link or QR code (tap the QR to enlarge it for easy scanning), and run the
+  line (call next, skip, recall…).
 - **Customer app** — the guest sees their number, who's being served now, and
-  how many are ahead — updating **live**, with no manual refresh.
+  how many are ahead — updating **live**, with no manual refresh. Guests can
+  opt in to a **browser notification** for when it's their turn.
+
+Both apps are **mobile-friendly** (responsive, touch-sized, notch-safe).
 
 It supports **multiple queue types** (e.g. `A` for 1–2 guests, `B` for 3–5),
 each with its own running number — so you get tickets like `A02` and `B07`

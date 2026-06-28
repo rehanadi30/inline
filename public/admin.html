@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>inline — operator console</title>
 
 <!-- ════════════════════════════════════════════════════════════════════
@@ -129,6 +129,42 @@
 
   .danger-zone { margin-top: 20px; text-align: right; }
   .danger-zone button { background: transparent; color: var(--danger); font-size: .8rem; text-decoration: underline; }
+
+  /* tap-to-enlarge QR lightbox — enlarges the QR while fading out everything behind it */
+  .result img { cursor: zoom-in; }
+  .qr-hint { font-size: .76rem; color: var(--muted); margin-top: 4px; }
+  .qr-lightbox {
+    position: fixed; inset: 0; z-index: 60;
+    display: none; align-items: center; justify-content: center;
+    padding: 24px;
+    background: rgba(15,23,42,.78);
+    -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+    opacity: 0; transition: opacity .25s ease;
+    cursor: zoom-out;
+  }
+  .qr-lightbox.show { display: flex; opacity: 1; }
+  .qr-lightbox img {
+    width: min(80vmin, 460px); height: min(80vmin, 460px);
+    background: #fff; border-radius: 20px; padding: 18px;
+    box-shadow: 0 30px 90px rgba(0,0,0,.55);
+    transform: scale(.94); transition: transform .25s ease;
+  }
+  .qr-lightbox.show img { transform: scale(1); }
+  .qr-lightbox .cap { position: absolute; bottom: 28px; left: 0; right: 0; text-align: center; color: #fff; opacity: .85; font-size: .88rem; }
+
+  /* phones */
+  @media (max-width: 560px) {
+    header { padding: 12px 14px; }
+    header h1 { font-size: 1.1rem; }
+    .wrap { padding: 14px; gap: 14px; }
+    .panel { padding: 14px; }
+    .btn-sm { padding: 9px 12px; }                 /* bigger tap targets */
+    .q-entry { flex-wrap: wrap; }
+    .q-actions { width: 100%; justify-content: flex-start; }
+    .board { grid-template-columns: 1fr; }
+    .col-actions .btn-primary { padding: 14px; }
+    .result img { width: 180px; height: 180px; }
+  }
 </style>
 </head>
 <body>
@@ -163,7 +199,8 @@
     <div id="resultView" class="result" hidden>
       <div style="color:var(--muted);font-size:.82rem;font-weight:600;">Added — give this to the guest</div>
       <div class="big" id="resLabel">A01</div>
-      <img id="resQr" alt="QR code" />
+      <img id="resQr" alt="QR code" title="Tap to enlarge" />
+      <div class="qr-hint">Tap the QR to enlarge</div>
       <div class="linkrow">
         <input id="resLink" readonly />
         <button class="btn-sm btn-ghost" id="copyBtn">Copy</button>
@@ -190,6 +227,12 @@
     <button class="btn-primary" id="unlockBtn">Unlock</button>
     <div class="err" id="loginErr"></div>
   </div>
+</div>
+
+<!-- tap-to-enlarge QR (fades out the surroundings) -->
+<div class="qr-lightbox" id="qrLightbox">
+  <img id="qrBig" alt="QR code enlarged" />
+  <div class="cap">Tap anywhere to close</div>
 </div>
 
 <div id="toast"></div>
@@ -336,6 +379,13 @@
     $("resultView").hidden = true;
     $("formView").hidden = false;
   };
+
+  // ── QR tap-to-enlarge (lightbox with fade backdrop) ─────────────────
+  function openQr() { $("qrBig").src = $("resQr").src; $("qrLightbox").classList.add("show"); }
+  function closeQr() { $("qrLightbox").classList.remove("show"); }
+  $("resQr").onclick = openQr;
+  $("qrLightbox").onclick = closeQr;
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeQr(); });
 
   // ── operator board ──────────────────────────────────────────────────
   function summarize(e) {

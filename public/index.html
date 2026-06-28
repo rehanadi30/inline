@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0f172a" />
 <title>Your queue ticket</title>
 
 <!-- ════════════════════════════════════════════════════════════════════
@@ -48,7 +49,9 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 24px;
+    /* respect notches / rounded corners on phones */
+    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+             max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   }
   .brand {
     color: #fff;
@@ -73,7 +76,8 @@
 
   .type-name { color: var(--muted); font-size: .95rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
   .label {
-    font-size: 5.5rem;
+    /* scales down on small phones, up on big screens */
+    font-size: clamp(3.6rem, 17vw, 5.5rem);
     font-weight: 800;
     line-height: 1.05;
     margin: 6px 0 4px;
@@ -115,6 +119,18 @@
   .headline.turn { color: var(--good); font-size: 1.25rem; animation: pulse 1.4s ease-in-out infinite; }
   @keyframes pulse { 0%,100%{ transform: scale(1);} 50%{ transform: scale(1.04);} }
 
+  /* notifications opt-in button */
+  .notify-btn {
+    display: block; width: 100%; margin-top: 16px;
+    padding: 13px 14px; border: none; border-radius: 14px;
+    background: #eef2ff; color: var(--primary);
+    font: inherit; font-weight: 700; cursor: pointer;
+    transition: background .2s, color .2s;
+  }
+  .notify-btn:active { transform: translateY(1px); }
+  .notify-btn.on { background: #dcfce7; color: var(--good); }
+  .notify-btn.blocked { background: #f1f5f9; color: var(--muted); cursor: default; }
+
   .foot { margin-top: 18px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: .8rem; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1; }
   .dot.live { background: var(--good); box-shadow: 0 0 0 0 rgba(22,163,74,.5); animation: ring 2s infinite; }
@@ -123,6 +139,16 @@
   .empty { color:#fff; text-align:center; max-width: 340px; }
   .empty h2 { margin-bottom: 8px; }
   .empty p { opacity:.85; }
+
+  /* small phones */
+  @media (max-width: 480px) {
+    .card { padding: 26px 20px 22px; border-radius: 18px; }
+    .brand { margin-bottom: 14px; }
+    .brand h1 { font-size: 1.3rem; }
+    .stat { padding: 14px 8px; }
+    .stat .num { font-size: 1.7rem; }
+    .stats { gap: 10px; }
+  }
 </style>
 </head>
 <body>
@@ -151,6 +177,8 @@
       </div>
     </div>
 
+    <button id="notifyBtn" class="notify-btn" hidden>🔔 Notify me when it's my turn</button>
+
     <div class="foot">
       <span class="dot" id="liveDot"></span>
       <span id="liveText">connecting…</span>
@@ -170,7 +198,7 @@
   const API_BASE = "";
   /* ──────────────────────────────────────────────────────────────────── */
 
-  // Wording for each status — tweak freely.
+  // Wording — tweak / translate freely.
   const TEXT = {
     next:    "You're next — get ready!",
     ahead:   (n) => `${n} ${n === 1 ? "group is" : "groups are"} ahead of you`,
@@ -179,9 +207,21 @@
     skipped: "Your number was skipped — please see the staff.",
     no_show: "Marked as no-show — please see the staff.",
   };
+  // Wording for the pop-up notifications.
+  const NOTIFY_TEXT = {
+    turnTitle: "It's your turn!",
+    turnBody:  (label) => `Number ${label} — please come to the counter.`,
+    soonTitle: "You're next",
+    soonBody:  (label) => `Number ${label} — get ready.`,
+  };
 
   const id = new URLSearchParams(location.search).get("id");
   const $ = (x) => document.getElementById(x);
+
+  // notification state
+  let notifyEnabled = localStorage.getItem("inline_notify") === "1";
+  let swReg = null;
+  let lastStatus = null, lastAhead = null;
 
   async function loadConfig() {
     try {
@@ -194,6 +234,79 @@
   function setLive(on) {
     $("liveDot").className = "dot" + (on ? " live" : "");
     $("liveText").textContent = on ? "live — updates automatically" : "reconnecting…";
+  }
+
+  // ── notifications (Chrome + other browsers, incl. mobile) ─────────────
+  // Uses the Notifications API. On mobile (e.g. Android Chrome) the
+  // Notification constructor is blocked, so we display through a Service
+  // Worker registration instead. This notifies while the page is open
+  // (including a backgrounded tab on desktop). For alerts when the app is
+  // fully closed you'd add Web Push (VAPID) — see CUSTOMIZE.md.
+  // NOTE: requires a secure context — HTTPS, or http://localhost for testing.
+  async function registerSW() {
+    if (swReg) return swReg;
+    if ("serviceWorker" in navigator) {
+      try { swReg = await navigator.serviceWorker.register("/sw.js"); } catch (_) {}
+    }
+    return swReg;
+  }
+  function notifyReady() {
+    return notifyEnabled && ("Notification" in window) && Notification.permission === "granted";
+  }
+  async function showNotif(title, body) {
+    if (!notifyReady()) return;
+    const opts = { body, tag: "inline-turn", renotify: true, vibrate: [200, 100, 200], data: { url: location.href } };
+    try {
+      const reg = swReg || (await registerSW());
+      if (reg && reg.showNotification) await reg.showNotification(title, opts);
+      else new Notification(title, opts);
+    } catch (_) { try { new Notification(title, opts); } catch (_) {} }
+  }
+  // Fire a notification only on a real status change (not on every refresh).
+  function maybeNotify(v) {
+    if (lastStatus !== null && notifyReady()) {
+      if (v.status === "serving" && lastStatus !== "serving") {
+        showNotif(NOTIFY_TEXT.turnTitle, NOTIFY_TEXT.turnBody(v.label));
+      } else if (v.status === "waiting" && v.ahead === 0 && (lastAhead === null || lastAhead > 0)) {
+        showNotif(NOTIFY_TEXT.soonTitle, NOTIFY_TEXT.soonBody(v.label));
+      }
+    }
+    lastStatus = v.status;
+    lastAhead = v.ahead;
+  }
+  function updateNotifyBtn() {
+    const btn = $("notifyBtn");
+    btn.classList.remove("on", "blocked");
+    if (!("Notification" in window)) { btn.hidden = true; return; }
+    if (Notification.permission === "denied") {
+      btn.textContent = "🔕 Notifications blocked in browser settings";
+      btn.classList.add("blocked");
+    } else if (notifyEnabled && Notification.permission === "granted") {
+      btn.textContent = "🔔 Notifications on — tap to turn off";
+      btn.classList.add("on");
+    } else {
+      btn.textContent = "🔔 Notify me when it's my turn";
+    }
+  }
+  async function onNotifyClick() {
+    if (!("Notification" in window) || Notification.permission === "denied") return;
+    if (notifyEnabled && Notification.permission === "granted") {
+      notifyEnabled = false; localStorage.removeItem("inline_notify");
+    } else {
+      await registerSW();
+      const perm = await Notification.requestPermission();
+      notifyEnabled = perm === "granted";
+      if (notifyEnabled) localStorage.setItem("inline_notify", "1");
+    }
+    updateNotifyBtn();
+  }
+  function initNotify() {
+    const btn = $("notifyBtn");
+    if (!("Notification" in window)) { btn.hidden = true; return; }
+    btn.hidden = false;
+    btn.onclick = onNotifyClick;
+    if (notifyEnabled && Notification.permission === "granted") registerSW();
+    updateNotifyBtn();
   }
 
   function render(v) {
@@ -229,6 +342,8 @@
         head.textContent = TEXT.no_show;
         break;
     }
+
+    maybeNotify(v);
   }
 
   async function refresh() {
@@ -265,6 +380,7 @@
     loadConfig();
     refresh();
     connect();
+    initNotify();
   }
 </script>
 </body>
