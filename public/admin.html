@@ -5,18 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>inline — operator console</title>
 
-<!-- ════════════════════════════════════════════════════════════════════
-     ADMIN / OPERATOR APP
-
-     One self-contained file. Edit the :root variables below to restyle.
-     The "add guest" form and the queue columns build themselves from
-     config.json (queue_types + fields) — so to add a field or a queue
-     type you edit config.json, NOT this file.
-     ════════════════════════════════════════════════════════════════════ -->
+<!--
+  Operator app: a single self-contained file. Restyle via the :root variables.
+  The add-guest form and the queue columns are built from config.json
+  (queue_types + fields), so add a field or a queue type there, not here.
+-->
 
 <style>
   :root {
-    /* ── 🎨 EDIT YOUR THEME HERE ─────────────────────────────────────── */
+    /* Theme: edit these to match your brand. */
     --bg:        #f1f5f9;
     --panel:     #ffffff;
     --text:      #0f172a;
@@ -29,7 +26,6 @@
     --danger:    #dc2626;
     --radius:    16px;
     --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    /* ────────────────────────────────────────────────────────────────── */
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -80,14 +76,13 @@
   .btn-warn { background: #fef3c7; color: var(--warn); }
   .btn-danger { background: #fee2e2; color: var(--danger); }
 
-  /* result card after adding a guest */
   .result { text-align: center; }
   .result .big { font-size: 3.2rem; font-weight: 800; color: var(--primary); margin: 4px 0; }
-  .result img { width: 200px; height: 200px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:8px; }
+  .result img { width: 200px; height: 200px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:8px; cursor: zoom-in; }
+  .qr-hint { font-size: .76rem; color: var(--muted); margin-top: 4px; }
   .linkrow { display: flex; gap: 8px; margin: 14px 0 6px; }
   .linkrow input { font-size: .8rem; }
 
-  /* board */
   .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
   .col { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
   .col-head { padding: 14px; border-bottom: 1px solid var(--line); }
@@ -115,7 +110,6 @@
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #cbd5e1; }
   .dot.live { background: var(--good); }
 
-  /* login overlay */
   .overlay { position: fixed; inset: 0; background: rgba(15,23,42,.6); display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
   .overlay.show { display: flex; }
   .login { background: var(--panel); border-radius: var(--radius); padding: 26px; width: 100%; max-width: 360px; }
@@ -123,16 +117,13 @@
   .login p { color: var(--muted); font-size: .85rem; margin-bottom: 14px; }
   .login .err { color: var(--danger); font-size: .82rem; margin-top: 8px; min-height: 1em; }
 
-  /* toast */
   #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: .85rem; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
 
   .danger-zone { margin-top: 20px; text-align: right; }
   .danger-zone button { background: transparent; color: var(--danger); font-size: .8rem; text-decoration: underline; }
 
-  /* tap-to-enlarge QR lightbox — enlarges the QR while fading out everything behind it */
-  .result img { cursor: zoom-in; }
-  .qr-hint { font-size: .76rem; color: var(--muted); margin-top: 4px; }
+  /* Tap-to-enlarge QR overlay. */
   .qr-lightbox {
     position: fixed; inset: 0; z-index: 60;
     display: none; align-items: center; justify-content: center;
@@ -152,19 +143,35 @@
   .qr-lightbox.show img { transform: scale(1); }
   .qr-lightbox .cap { position: absolute; bottom: 28px; left: 0; right: 0; text-align: center; color: #fff; opacity: .85; font-size: .88rem; }
 
-  /* phones */
   @media (max-width: 560px) {
     header { padding: 12px 14px; }
     header h1 { font-size: 1.1rem; }
     .wrap { padding: 14px; gap: 14px; }
     .panel { padding: 14px; }
-    .btn-sm { padding: 9px 12px; }                 /* bigger tap targets */
+    .btn-sm { padding: 9px 12px; }
     .q-entry { flex-wrap: wrap; }
     .q-actions { width: 100%; justify-content: flex-start; }
     .board { grid-template-columns: 1fr; }
     .col-actions .btn-primary { padding: 14px; }
     .result img { width: 180px; height: 180px; }
   }
+
+  .hist-panel { margin-top: 16px; }
+  .hist-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+  .hist-head h2 { font-size: 1rem; }
+  .hist { display: flex; flex-direction: column; max-height: 320px; overflow-y: auto; }
+  .hist-row { display: flex; align-items: center; gap: 10px; font-size: .85rem; padding: 7px 6px; border-bottom: 1px solid var(--line); }
+  .hist-row:last-child { border-bottom: none; }
+  .hist-time { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 58px; }
+  .hist-label { font-weight: 800; color: var(--primary); min-width: 46px; }
+  .hist-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hist-wait { color: var(--muted); font-size: .76rem; }
+  .hist-badge { font-size: .7rem; padding: 2px 8px; border-radius: 999px; text-transform: capitalize; }
+  .badge-done { background: #f1f5f9; color: var(--muted); }
+  .badge-serving { background: #dcfce7; color: var(--good); }
+  .badge-skipped, .badge-no_show { background: #fef3c7; color: var(--warn); }
+  .tools { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .filebtn { cursor: pointer; display: inline-flex; align-items: center; }
 </style>
 </head>
 <body>
@@ -181,7 +188,6 @@
 </header>
 
 <div class="wrap">
-  <!-- ── Add guest ─────────────────────────────────────────────── -->
   <section class="panel" id="addPanel">
     <h2>Add to queue</h2>
 
@@ -195,7 +201,6 @@
       </form>
     </div>
 
-    <!-- shown after a successful add -->
     <div id="resultView" class="result" hidden>
       <div style="color:var(--muted);font-size:.82rem;font-weight:600;">Added — give this to the guest</div>
       <div class="big" id="resLabel">A01</div>
@@ -209,16 +214,24 @@
     </div>
   </section>
 
-  <!-- ── Live board ────────────────────────────────────────────── -->
   <section>
     <div class="board" id="board"></div>
+
+    <div class="panel hist-panel">
+      <div class="hist-head"><h2>History</h2><span class="ds" id="histCount"></span></div>
+      <div class="hist" id="history"></div>
+    </div>
+
+    <div class="tools">
+      <button id="backupBtn" class="btn-sm btn-ghost">Download backup</button>
+      <label class="btn-sm btn-ghost filebtn">Restore<input id="restoreInput" type="file" accept="application/json,.json" hidden /></label>
+    </div>
     <div class="danger-zone">
       <button id="resetAll">Reset everything</button>
     </div>
   </section>
 </div>
 
-<!-- login overlay -->
 <div class="overlay" id="overlay">
   <div class="login">
     <h2>Operator sign in</h2>
@@ -229,7 +242,6 @@
   </div>
 </div>
 
-<!-- tap-to-enlarge QR (fades out the surroundings) -->
 <div class="qr-lightbox" id="qrLightbox">
   <img id="qrBig" alt="QR code enlarged" />
   <div class="cap">Tap anywhere to close</div>
@@ -238,10 +250,8 @@
 <div id="toast"></div>
 
 <script>
-  /* ── ⚙️ CONFIG ──────────────────────────────────────────────────────
-     Leave API_BASE empty when this page is served by the inline backend. */
+  // Leave API_BASE empty when this page is served by the inline backend.
   const API_BASE = "";
-  /* ──────────────────────────────────────────────────────────────────── */
 
   const $ = (x) => document.getElementById(x);
   const TOKEN_KEY = "inline_admin_token";
@@ -249,7 +259,6 @@
   let selectedType = null;
   let token = localStorage.getItem(TOKEN_KEY) || "";
 
-  // ── small helpers ──────────────────────────────────────────────────
   function toast(msg) {
     const t = $("toast"); t.textContent = msg; t.classList.add("show");
     clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2200);
@@ -275,7 +284,7 @@
     return res.json();
   }
 
-  // ── auth ───────────────────────────────────────────────────────────
+  // Auth
   function showLogin(err) {
     $("overlay").classList.add("show");
     $("loginErr").textContent = err || "";
@@ -290,14 +299,13 @@
   $("unlockBtn").onclick = async () => {
     token = $("tokenInput").value.trim();
     localStorage.setItem(TOKEN_KEY, token);
-    // verify by hitting a protected endpoint
     try { await apiGet("/api/entries"); hideLogin(); $("signout").hidden = false; loadBoard(); }
-    catch (_) { /* handle401 already showed the error */ }
+    catch (_) {}
   };
   $("tokenInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("unlockBtn").click(); });
   $("signout").onclick = () => { handle401(); };
 
-  // ── add-guest form (built from config) ──────────────────────────────
+  // Add-guest form, built from config
   function renderTypeButtons() {
     const box = $("typeButtons"); box.innerHTML = "";
     CONFIG.queue_types.forEach((t, i) => {
@@ -358,7 +366,6 @@
   });
 
   function customerLink(r) {
-    // Prefer the configured public URL; otherwise fall back to this origin.
     const base = (CONFIG.public_url && CONFIG.public_url.trim()) || window.location.origin;
     return base.replace(/\/$/, "") + r.customer_path;
   }
@@ -380,14 +387,14 @@
     $("formView").hidden = false;
   };
 
-  // ── QR tap-to-enlarge (lightbox with fade backdrop) ─────────────────
+  // QR enlarge
   function openQr() { $("qrBig").src = $("resQr").src; $("qrLightbox").classList.add("show"); }
   function closeQr() { $("qrLightbox").classList.remove("show"); }
   $("resQr").onclick = openQr;
   $("qrLightbox").onclick = closeQr;
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeQr(); });
 
-  // ── operator board ──────────────────────────────────────────────────
+  // Operator board
   function summarize(e) {
     const f = e.fields || {};
     const defs = CONFIG.fields || [];
@@ -406,14 +413,13 @@
     const { title, sub } = summarize(e);
     const el = document.createElement("div");
     el.className = "q-entry " + e.status;
-    const actions = actionButtons(e);
     el.innerHTML =
       `<div class="q-num">${e.label}</div>` +
       `<div class="q-info"><div class="q-title">${escapeHtml(title)}</div>` +
       (sub ? `<div class="q-sub">${escapeHtml(sub)}</div>` : "") + `</div>` +
       `<div class="q-actions"></div>`;
     const box = el.querySelector(".q-actions");
-    actions.forEach(([txt, cls, status]) => {
+    actionButtons(e).forEach(([txt, cls, status]) => {
       const b = document.createElement("button");
       b.className = "btn-sm " + cls; b.textContent = txt;
       b.onclick = () => act(e.id, status);
@@ -432,28 +438,71 @@
     }
   }
 
+  // Tells a network/offline failure apart from an already-handled API error.
+  function isNetErr(e) { return !e || (e.message !== "unauthorized" && e.message !== "request failed"); }
+
   async function act(id, status) {
-    await apiSend("/api/entries/" + encodeURIComponent(id) + "/status", "POST", { status });
-    // board refreshes via the SSE nudge; refresh now too for snappiness
+    try { await apiSend("/api/entries/" + encodeURIComponent(id) + "/status", "POST", { status }); }
+    catch (e) { if (isNetErr(e)) toast("Offline — action not saved"); return; }
     loadBoard();
   }
 
   async function callNext(code) {
-    const r = await apiSend("/api/queue/" + encodeURIComponent(code) + "/next", "POST");
+    let r;
+    try { r = await apiSend("/api/queue/" + encodeURIComponent(code) + "/next", "POST"); }
+    catch (e) { if (isNetErr(e)) toast("Offline — action not saved"); return; }
     toast(r.called ? "Called next" : "No one waiting");
     loadBoard();
   }
 
   async function resetType(code) {
     if (!confirm("Clear queue " + code + " and reset its numbers?")) return;
-    await apiSend("/api/queue/" + encodeURIComponent(code) + "/reset", "POST");
+    try { await apiSend("/api/queue/" + encodeURIComponent(code) + "/reset", "POST"); }
+    catch (e) { if (isNetErr(e)) toast("Offline — action not saved"); return; }
     loadBoard();
   }
 
   $("resetAll").onclick = async () => {
     if (!confirm("Clear ALL queues and reset every number? This cannot be undone.")) return;
-    await apiSend("/api/reset", "POST");
+    try { await apiSend("/api/reset", "POST"); }
+    catch (e) { if (isNetErr(e)) toast("Offline — action not saved"); return; }
     loadBoard();
+  };
+
+  // Backup
+  $("backupBtn").onclick = async () => {
+    try {
+      const res = await fetch(API_BASE + "/api/admin/export", { headers: authHeaders() });
+      if (res.status === 401) { handle401(); return; }
+      if (!res.ok) { toast("Backup failed"); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const ts = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+      a.href = url; a.download = `inline-backup-${ts}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast("Backup downloaded");
+    } catch (_) { toast("Offline — can't back up now"); }
+  };
+  $("restoreInput").onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!confirm("Restore from this backup? It REPLACES all current queue data.")) { e.target.value = ""; return; }
+    try {
+      const text = await file.text();
+      JSON.parse(text); // validate locally before sending
+      const res = await fetch(API_BASE + "/api/admin/import", {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: text,
+      });
+      if (res.status === 401) { handle401(); return; }
+      if (!res.ok) { toast("Restore failed: " + (await res.text())); return; }
+      toast("Backup restored");
+      loadBoard();
+    } catch (_) { toast("Invalid backup file"); }
+    finally { e.target.value = ""; }
   };
 
   function renderBoard(data) {
@@ -482,7 +531,7 @@
          </div>
          <div class="col-actions">
            <button class="btn-primary btn-next">Call next (${waiting.length})</button>
-           <button class="btn-sm btn-ghost btn-reset" title="Reset this queue">↺</button>
+           <button class="btn-sm btn-ghost btn-reset" title="Reset this queue">Reset</button>
          </div>
          <div class="list"></div>`;
       col.querySelector(".btn-next").onclick = () => callNext(t.code);
@@ -509,14 +558,51 @@
   }
 
   async function loadBoard() {
-    try { renderBoard(await apiGet("/api/entries")); } catch (_) {}
+    try {
+      const data = await apiGet("/api/entries");
+      renderBoard(data);
+      renderHistory(data);
+    } catch (_) {}
+  }
+
+  // History of numbers already called/served, with times
+  function fmtTime(ms) {
+    if (!ms) return "—";
+    return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  function renderHistory(data) {
+    const box = $("history"); box.innerHTML = "";
+    const items = (data.entries || [])
+      .filter((e) => e.status !== "waiting")
+      .sort((a, b) => (b.called_at || b.created_at) - (a.called_at || a.created_at))
+      .slice(0, 80);
+    $("histCount").textContent = items.length ? `${items.length} shown` : "";
+    if (!items.length) { box.innerHTML = '<div class="empty-note">No history yet</div>'; return; }
+    items.forEach((e) => {
+      const { title } = summarize(e);
+      const when = e.called_at || e.created_at;
+      let wait = "";
+      if (e.called_at && e.created_at && e.called_at >= e.created_at) {
+        const mins = Math.round((e.called_at - e.created_at) / 60000);
+        wait = mins > 0 ? `waited ${mins}m` : "waited <1m";
+      }
+      const row = document.createElement("div");
+      row.className = "hist-row";
+      row.innerHTML =
+        `<span class="hist-time">${fmtTime(when)}</span>` +
+        `<span class="hist-label">${e.label}</span>` +
+        `<span class="hist-name">${escapeHtml(title)}</span>` +
+        `<span class="hist-wait">${wait}</span>` +
+        `<span class="hist-badge badge-${e.status}">${e.status.replace("_", "-")}</span>`;
+      box.appendChild(row);
+    });
   }
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
-  // ── live updates ────────────────────────────────────────────────────
+  // Live updates
   function setLive(on) {
     $("liveDot").className = "dot" + (on ? " live" : "");
     $("liveText").textContent = on ? "live" : "offline";
@@ -530,7 +616,6 @@
     } catch (_) { setLive(false); }
   }
 
-  // ── boot ────────────────────────────────────────────────────────────
   (async function init() {
     try { CONFIG = await (await fetch(API_BASE + "/api/config")).json(); }
     catch (_) { toast("Cannot reach backend"); return; }
@@ -544,7 +629,11 @@
     else { if (token) $("signout").hidden = false; loadBoard(); }
 
     connect();
-    setInterval(loadBoard, 30000); // safety refresh
+    setInterval(loadBoard, 30000);
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
   })();
 </script>
 </body>

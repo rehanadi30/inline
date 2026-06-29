@@ -16,6 +16,20 @@ qrcode = "0.14"
 nanoid = "0.4"
 dotenvy = "0.15"
 
+# Optional database backends. OFF by default, so the default build pulls ZERO
+# extra dependencies and stays tiny. Enable one at build time, e.g.:
+#   cargo build --release --features sqlite
+#   cargo build --release --features postgres
+#   cargo build --release --features mongo
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "any"], optional = true }
+mongodb = { version = "3", optional = true }
+
+[features]
+default = []
+sqlite = ["dep:sqlx", "sqlx/sqlite"]
+postgres = ["dep:sqlx", "sqlx/postgres", "sqlx/tls-rustls"]
+mongo = ["dep:mongodb"]
+
 [profile.release]
 opt-level = "z"
 lto = true

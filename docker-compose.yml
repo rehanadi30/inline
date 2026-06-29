@@ -1,6 +1,10 @@
 services:
   inline:
-    build: .
+    build:
+      context: .
+      # Enable a database backend (then set INLINE_STORAGE / INLINE_DATABASE_URL):
+      # args:
+      #   FEATURES: postgres
     image: inline
     container_name: inline
     ports:

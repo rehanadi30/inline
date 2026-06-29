@@ -6,36 +6,31 @@
 <meta name="theme-color" content="#0f172a" />
 <title>Your queue ticket</title>
 
-<!-- ════════════════════════════════════════════════════════════════════
-     CUSTOMER APP  (the screen guests see on their phone)
-
-     This is ONE self-contained file. To restyle it you only need to edit
-     the variables in the :root block right below — colours, fonts, radius,
-     background. To change wording, edit the small text strings further down.
-     No build step, no framework.
-     ════════════════════════════════════════════════════════════════════ -->
+<!--
+  Customer app: a single self-contained file with no build step.
+  Restyle it by editing the variables in :root; change wording via the TEXT
+  and NOTIFY_TEXT objects in the script below.
+-->
 
 <style>
   :root {
-    /* ── 🎨 EDIT YOUR THEME HERE ─────────────────────────────────────── */
-    --bg:           #0f172a;   /* page background                          */
-    --bg-accent:    #1e293b;   /* subtle gradient partner for --bg         */
-    --card:         #ffffff;   /* the ticket card                          */
-    --text:         #0f172a;   /* main text on the card                    */
-    --muted:        #64748b;   /* secondary text                           */
-    --primary:      #6366f1;   /* brand / accent colour                    */
-    --primary-text: #ffffff;   /* text on top of --primary                 */
-    --good:         #16a34a;   /* "it's your turn" colour                  */
-    --warn:         #d97706;   /* skipped / attention colour               */
-    --radius:       22px;      /* corner roundness                         */
+    /* Theme: edit these to match your brand. */
+    --bg:           #0f172a;
+    --bg-accent:    #1e293b;
+    --card:         #ffffff;
+    --text:         #0f172a;
+    --muted:        #64748b;
+    --primary:      #6366f1;
+    --primary-text: #ffffff;
+    --good:         #16a34a;
+    --warn:         #d97706;
+    --radius:       22px;
     --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
-    /* Optional full-page background image. Paste a URL between the quotes. */
-    --bg-image: none;          /* e.g. url("https://.../photo.jpg")        */
-    /* ────────────────────────────────────────────────────────────────── */
+    /* Optional full-page background image, e.g. url("https://.../photo.jpg"). */
+    --bg-image: none;
   }
 
-  /* You usually won't need to touch anything below this line. */
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
   body {
@@ -49,7 +44,6 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    /* respect notches / rounded corners on phones */
     padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
              max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   }
@@ -76,7 +70,6 @@
 
   .type-name { color: var(--muted); font-size: .95rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
   .label {
-    /* scales down on small phones, up on big screens */
     font-size: clamp(3.6rem, 17vw, 5.5rem);
     font-weight: 800;
     line-height: 1.05;
@@ -119,7 +112,6 @@
   .headline.turn { color: var(--good); font-size: 1.25rem; animation: pulse 1.4s ease-in-out infinite; }
   @keyframes pulse { 0%,100%{ transform: scale(1);} 50%{ transform: scale(1.04);} }
 
-  /* notifications opt-in button */
   .notify-btn {
     display: block; width: 100%; margin-top: 16px;
     padding: 13px 14px; border: none; border-radius: 14px;
@@ -140,7 +132,6 @@
   .empty h2 { margin-bottom: 8px; }
   .empty p { opacity:.85; }
 
-  /* small phones */
   @media (max-width: 480px) {
     .card { padding: 26px 20px 22px; border-radius: 18px; }
     .brand { margin-bottom: 14px; }
@@ -153,7 +144,6 @@
 </head>
 <body>
 
-  <!-- ▼▼ DROP EXTRA COMPONENTS / LOGO HERE if you like ▼▼ -->
   <div class="brand">
     <h1 id="brand">inline</h1>
     <p id="tagline">Please wait for your number</p>
@@ -177,7 +167,7 @@
       </div>
     </div>
 
-    <button id="notifyBtn" class="notify-btn" hidden>🔔 Notify me when it's my turn</button>
+    <button id="notifyBtn" class="notify-btn" hidden>Notify me when it's my turn</button>
 
     <div class="foot">
       <span class="dot" id="liveDot"></span>
@@ -191,14 +181,10 @@
   </div>
 
 <script>
-  /* ── ⚙️ CONFIG ──────────────────────────────────────────────────────
-     Leave API_BASE empty if this page is served by the inline backend.
-     If you host this HTML somewhere else, point it at the backend, e.g.
-     const API_BASE = "https://queue.example.com";                        */
+  // Leave API_BASE empty when this page is served by the inline backend.
+  // Set it to the backend origin if you host this file elsewhere.
   const API_BASE = "";
-  /* ──────────────────────────────────────────────────────────────────── */
 
-  // Wording — tweak / translate freely.
   const TEXT = {
     next:    "You're next — get ready!",
     ahead:   (n) => `${n} ${n === 1 ? "group is" : "groups are"} ahead of you`,
@@ -206,10 +192,10 @@
     done:    "Thank you! Your visit is complete.",
     skipped: "Your number was skipped — please see the staff.",
     no_show: "Marked as no-show — please see the staff.",
+    expired: "This ticket has expired — please get a new one.",
   };
-  // Wording for the pop-up notifications.
   const NOTIFY_TEXT = {
-    turnTitle: "It's your turn!",
+    turnTitle: "It's your turn",
     turnBody:  (label) => `Number ${label} — please come to the counter.`,
     soonTitle: "You're next",
     soonBody:  (label) => `Number ${label} — get ready.`,
@@ -218,17 +204,17 @@
   const id = new URLSearchParams(location.search).get("id");
   const $ = (x) => document.getElementById(x);
 
-  // notification state
   let notifyEnabled = localStorage.getItem("inline_notify") === "1";
   let swReg = null;
   let lastStatus = null, lastAhead = null;
+  let online = true;
 
   async function loadConfig() {
     try {
       const c = await (await fetch(API_BASE + "/api/config")).json();
       if (c.brand)   { $("brand").textContent = c.brand; document.title = c.brand + " — your ticket"; }
       if (c.tagline) { $("tagline").textContent = c.tagline; }
-    } catch (_) { /* keep defaults */ }
+    } catch (_) {}
   }
 
   function setLive(on) {
@@ -236,13 +222,9 @@
     $("liveText").textContent = on ? "live — updates automatically" : "reconnecting…";
   }
 
-  // ── notifications (Chrome + other browsers, incl. mobile) ─────────────
-  // Uses the Notifications API. On mobile (e.g. Android Chrome) the
-  // Notification constructor is blocked, so we display through a Service
-  // Worker registration instead. This notifies while the page is open
-  // (including a backgrounded tab on desktop). For alerts when the app is
-  // fully closed you'd add Web Push (VAPID) — see CUSTOMIZE.md.
-  // NOTE: requires a secure context — HTTPS, or http://localhost for testing.
+  // Notifications use the Notifications API, shown via a service worker so they
+  // also work on mobile browsers that block the page-level Notification
+  // constructor. They require a secure context (HTTPS, or http://localhost).
   async function registerSW() {
     if (swReg) return swReg;
     if ("serviceWorker" in navigator) {
@@ -262,7 +244,7 @@
       else new Notification(title, opts);
     } catch (_) { try { new Notification(title, opts); } catch (_) {} }
   }
-  // Fire a notification only on a real status change (not on every refresh).
+  // Fire only on an actual status change, not on every refresh.
   function maybeNotify(v) {
     if (lastStatus !== null && notifyReady()) {
       if (v.status === "serving" && lastStatus !== "serving") {
@@ -279,13 +261,13 @@
     btn.classList.remove("on", "blocked");
     if (!("Notification" in window)) { btn.hidden = true; return; }
     if (Notification.permission === "denied") {
-      btn.textContent = "🔕 Notifications blocked in browser settings";
+      btn.textContent = "Notifications blocked in browser settings";
       btn.classList.add("blocked");
     } else if (notifyEnabled && Notification.permission === "granted") {
-      btn.textContent = "🔔 Notifications on — tap to turn off";
+      btn.textContent = "Notifications on — tap to turn off";
       btn.classList.add("on");
     } else {
-      btn.textContent = "🔔 Notify me when it's my turn";
+      btn.textContent = "Notify me when it's my turn";
     }
   }
   async function onNotifyClick() {
@@ -320,6 +302,14 @@
     const head = $("headline");
     head.className = "headline";
 
+    if (v.expired) {
+      pill.className = "pill muted"; pill.textContent = "Expired";
+      head.textContent = TEXT.expired;
+      $("ahead").textContent = "—";
+      lastStatus = "expired"; lastAhead = null;
+      return;
+    }
+
     switch (v.status) {
       case "waiting":
         pill.className = "pill"; pill.textContent = "Waiting";
@@ -352,7 +342,7 @@
       const res = await fetch(API_BASE + "/api/entries/" + encodeURIComponent(id));
       if (!res.ok) { showEmpty(); return; }
       render(await res.json());
-    } catch (_) { /* transient; SSE or poll will retry */ }
+    } catch (_) {}
   }
 
   function showEmpty() {
@@ -360,19 +350,28 @@
     $("empty").hidden = false;
   }
 
-  // Live updates: a single SSE stream nudges us; we then refetch our status.
-  // EventSource reconnects on its own, so this stays robust on flaky mobile.
+  // Live updates over a single SSE stream; on each nudge we refetch our status.
   function connect() {
     try {
       const es = new EventSource(API_BASE + "/api/events");
-      es.onopen = () => setLive(true);
+      es.onopen = () => { online = true; setLive(true); refresh(); };
       es.onmessage = () => refresh();
-      es.onerror = () => setLive(false);
+      es.onerror = () => { online = false; setLive(false); };
     } catch (_) { setLive(false); }
   }
 
-  // Safety net in case a nudge is ever missed (very light: every 30s).
+  // Safety refresh in case a nudge is missed.
   setInterval(refresh, 30000);
+
+  // Health ping: detect downtime and recover automatically when the server returns.
+  async function pingHealth() {
+    try {
+      const r = await fetch(API_BASE + "/api/health", { cache: "no-store" });
+      if (!r.ok) throw new Error("down");
+      if (!online) { online = true; setLive(true); refresh(); }
+    } catch (_) { online = false; setLive(false); }
+  }
+  setInterval(pingHealth, 120000);
 
   if (!id) {
     showEmpty();
@@ -381,6 +380,7 @@
     refresh();
     connect();
     initNotify();
+    registerSW();
   }
 </script>
 </body>

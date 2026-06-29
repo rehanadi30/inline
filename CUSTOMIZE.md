@@ -9,7 +9,7 @@ want to change — from colours to swapping out the whole storage layer.
 - [4. Add your own components](#4-add-your-own-components)
 - [5. Host the customer app separately](#5-host-the-customer-app-separately)
 - [6. Swap the message broker (scale out)](#6-swap-the-message-broker-scale-out)
-- [7. Swap the storage (SQLite/Postgres)](#7-swap-the-storage-sqlitepostgres)
+- [7. Storage backends](#7-storage-backends)
 - [8. Production hardening](#8-production-hardening)
 - [9. Customer notifications](#9-customer-notifications)
 
@@ -38,8 +38,8 @@ Each app is a single HTML file with a **theme block at the very top**. Open
 --bg-image: url("https://images.example.com/restaurant.jpg");
 ```
 
-**Logo / extra branding:** in `public/index.html` find the marker
-`▼▼ DROP EXTRA COMPONENTS / LOGO HERE ▼▼` and add any HTML, e.g.:
+**Logo / extra branding:** add any HTML inside the `.brand` block near the top
+of the `<body>` in `public/index.html`, e.g.:
 
 ```html
 <img src="/logo.png" alt="logo" style="height:48px;margin-bottom:12px;" />
@@ -168,19 +168,30 @@ the SSE endpoint, or the front-ends needs to change.
 
 ---
 
-## 7. Swap the storage (SQLite/Postgres)
+## 7. Storage backends
 
-State lives in memory and is snapshotted to JSON by `persist()` in
-`src/store.rs` — simple and plenty for a host stand. To move to a real database
-for heavier use or analytics:
+By default the queue is persisted to a JSON file (`INLINE_DATA_FILE`) — no setup,
+ideal for a single site. To use a database instead, set `INLINE_STORAGE` and
+build with the matching feature:
 
-- Keep the `Store` method signatures (`create`, `call_next`, `set_status`,
-  `public_view`, …) so handlers don't change.
-- Replace the bodies + `persist()` with SQL via
-  [`sqlx`](https://github.com/launchbadge/sqlx) (async, supports SQLite &
-  Postgres) or `rusqlite` (sync, SQLite only).
-- The `Entry` struct already derives `Serialize`/`Deserialize`, so mapping rows
-  is straightforward.
+| `INLINE_STORAGE` | Build with                                  | `INLINE_DATABASE_URL` example               |
+|------------------|---------------------------------------------|---------------------------------------------|
+| `json` (default) | —                                           | (uses `INLINE_DATA_FILE`)                   |
+| `sqlite`         | `cargo build --release --features sqlite`   | `sqlite:inline.db?mode=rwc`                 |
+| `postgres`       | `cargo build --release --features postgres` | `postgres://user:pass@host:5432/inline`     |
+| `mongo`          | `cargo build --release --features mongo`    | `mongodb://host:27017` (+ `INLINE_DB_NAME`) |
+
+Each backend stores the whole queue as a single JSON document and loads it on
+startup, so the data model is identical everywhere and the default binary stays
+dependency-free. The selection lives in `src/storage.rs`.
+
+**Add another backend** (Redis, S3, …): implement `load`/`save` for a new
+variant of the `Storage` enum in `src/storage.rs` and handle it in `from_env`.
+Nothing in `store.rs` or the handlers changes.
+
+**Want normalized SQL tables** (to query individual entries in Postgres)?
+Replace the document `load`/`save` in `SqlBackend` with per-entry rows; `Entry`
+already derives `Serialize`/`Deserialize`, so mapping is straightforward.
 
 ---
 
@@ -248,7 +259,7 @@ when it's **their turn** — works in Chrome, Edge, Firefox, and Android Chrome
 (which needs the included Service Worker, `public/sw.js`, already wired up).
 
 For the guest:
-- A **"🔔 Notify me when it's my turn"** button appears on their ticket.
+- A **"Notify me when it's my turn"** button appears on their ticket.
 - Tapping it asks for permission; once granted, the choice is remembered.
 - Alerts are driven by the existing SSE stream — no polling.
 

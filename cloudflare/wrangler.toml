@@ -1,0 +1,15 @@
+name = "inline"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# Serve the two single-file apps straight from Cloudflare's edge.
+# (Path is relative to this file, pointing at the repo's ../public folder.)
+[assets]
+directory = "../public"
+binding = "ASSETS"
+
+[vars]
+# Your inline backend (the Rust server), reachable over HTTPS. The easiest way
+# to expose a self-hosted backend is a Cloudflare Tunnel — see CLOUDFLARE.md.
+# Override per-environment with:  wrangler deploy --var BACKEND_URL:https://...
+BACKEND_URL = "https://inline-backend.example.com"

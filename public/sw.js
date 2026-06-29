@@ -1,18 +1,69 @@
-// inline — service worker
+// Service worker for inline.
 //
-// Why this exists: on mobile browsers (e.g. Android Chrome) the page-level
-// `new Notification()` API is blocked; notifications must be shown through a
-// Service Worker registration. The customer app registers this file and calls
-// `registration.showNotification(...)`. This worker also focuses/opens the
-// ticket page when a notification is tapped.
+// - Notifications: shown via the service worker so they also work on mobile
+//   browsers that block the page-level Notification constructor.
+// - Offline: caches the app shells and the latest GET responses so the apps
+//   still load and show the last-known state when the server is unreachable.
+//   Mutations (POST) are never cached; they fail while offline and the UI says so.
 //
-// It intentionally does NOT cache anything (the app must always show live
-// data). For alerts when the app is fully closed, add Web Push below.
+// Bump CACHE after changing the apps to invalidate old caches.
 
-self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+const CACHE = "inline-v1";
+const SHELL = ["/", "/index.html", "/admin.html"];
 
-// Tapping a notification focuses an existing tab, or opens the ticket page.
+self.addEventListener("install", (event) => {
+  self.skipWaiting();
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL).catch(() => {})));
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+    await self.clients.claim();
+  })());
+});
+
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  const url = new URL(req.url);
+
+  // Pass through non-GET, the SSE stream, and the health ping (health must hit
+  // the network so the app can detect downtime).
+  if (req.method !== "GET" || url.pathname === "/api/events" || url.pathname === "/api/health") {
+    return;
+  }
+
+  const isApi = url.pathname.startsWith("/api/");
+  const isNav = req.mode === "navigate";
+
+  if (isNav || isApi) {
+    // Network-first, falling back to cache when offline.
+    event.respondWith((async () => {
+      try {
+        const res = await fetch(req);
+        if (res && res.ok) {
+          const c = await caches.open(CACHE);
+          c.put(req, res.clone());
+        }
+        return res;
+      } catch (err) {
+        const cached = await caches.match(req);
+        if (cached) return cached;
+        if (isNav) {
+          const shell = (await caches.match("/admin.html")) || (await caches.match("/"));
+          if (shell) return shell;
+        }
+        throw err;
+      }
+    })());
+    return;
+  }
+
+  // Other static assets: cache-first.
+  event.respondWith(caches.match(req).then((c) => c || fetch(req)));
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const target = (event.notification.data && event.notification.data.url) || "/";
@@ -25,9 +76,8 @@ self.addEventListener("notificationclick", (event) => {
   })());
 });
 
-// ── OPTIONAL: Web Push (alerts even when the app is fully closed) ──────────
-// Requires a push service + VAPID keys + a backend endpoint to send pushes.
-// See CUSTOMIZE.md. The handler is ready; wiring the server side is up to you.
+// Web Push handler (optional). Sending pushes requires VAPID keys and a server
+// endpoint; see CUSTOMIZE.md.
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (_) {}

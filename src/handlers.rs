@@ -1,19 +1,6 @@
-//! HTTP handlers — the JSON API plus the SSE stream and the QR generator.
-//!
-//! Endpoints:
-//!   Public (no auth):
-//!     GET  /api/config            queue definition + branding (for both apps)
-//!     GET  /api/state             public "now serving" board
-//!     GET  /api/entries/:id       one guest's own status (no personal data)
-//!     GET  /api/events            SSE live-update stream
-//!     GET  /api/qr?data=...       QR code (SVG) for any text/URL
-//!   Operator (needs ADMIN_TOKEN when one is configured):
-//!     GET  /api/entries           full list incl. the details operators typed
-//!     POST /api/entries           add a guest
-//!     POST /api/entries/:id/status   set a guest's status (skip/recall/serve/done)
-//!     POST /api/queue/:code/next     finish current + call next in a type
-//!     POST /api/queue/:code/reset    clear one queue type
-//!     POST /api/reset                clear everything
+//! HTTP handlers: the JSON API, the SSE stream, and the QR generator. Public
+//! endpoints are unauthenticated; operator endpoints require the admin token
+//! when one is configured. See README.md for the full endpoint table.
 
 use crate::store::Status;
 use crate::AppState;
@@ -57,7 +44,7 @@ fn notify(state: &AppState) {
     state.broker.publish(r#"{"type":"update"}"#);
 }
 
-// ── Public ────────────────────────────────────────────────────────────────
+// Public endpoints (no auth).
 
 /// Branding + queue definition, consumed by both the admin and customer apps.
 pub async fn get_config(State(state): State<AppState>) -> Json<Value> {
@@ -67,6 +54,7 @@ pub async fn get_config(State(state): State<AppState>) -> Json<Value> {
     if let Value::Object(map) = &mut value {
         map.insert("public_url".into(), json!(state.public_url));
         map.insert("auth_required".into(), json!(state.admin_token.is_some()));
+        map.insert("ticket_ttl".into(), json!(state.ticket_ttl_secs));
     }
     Json(value)
 }
@@ -80,7 +68,7 @@ pub async fn get_state(State(state): State<AppState>) -> Json<Value> {
 /// A single guest's own status — safe to expose, contains no personal data.
 pub async fn get_entry(State(state): State<AppState>, Path(id): Path<String>) -> ApiResult {
     let store = state.store.read().await;
-    match store.public_view(&id, &state.config) {
+    match store.public_view(&id, &state.config, state.ticket_ttl_secs) {
         Some(view) => Ok(Json(serde_json::to_value(view).unwrap_or(Value::Null))),
         None => Err((StatusCode::NOT_FOUND, "queue entry not found").into_response()),
     }
@@ -122,7 +110,7 @@ pub async fn qr(Query(q): Query<QrQuery>) -> Response {
     }
 }
 
-// ── Operator ────────────────────────────────────────────────────────────────
+// Operator endpoints (require the admin token when configured).
 
 /// Full list of guests, including the details the operator entered. Protected.
 pub async fn list_entries(State(state): State<AppState>, headers: HeaderMap) -> ApiResult {
@@ -214,7 +202,7 @@ pub async fn next_queue(
     }
     let called = {
         let mut store = state.store.write().await;
-        store.call_next(&code)
+        store.call_next(&code, state.ticket_ttl_secs)
     };
     notify(&state);
     Ok(Json(json!({ "called": called })))
@@ -241,6 +229,52 @@ pub async fn reset_all(State(state): State<AppState>, headers: HeaderMap) -> Api
     {
         let mut store = state.store.write().await;
         store.reset(None);
+    }
+    notify(&state);
+    Ok(Json(json!({ "ok": true })))
+}
+
+/// Cheap liveness check — used by the customer app to detect server downtime.
+pub async fn health() -> Json<Value> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    Json(json!({ "ok": true, "time": now }))
+}
+
+/// Download the full queue state as a JSON backup file. Protected.
+pub async fn export_data(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(resp) = authorize(&state, &headers) {
+        return resp;
+    }
+    let body = {
+        let store = state.store.read().await;
+        store.export_json()
+    };
+    (
+        [
+            (header::CONTENT_TYPE, "application/json"),
+            (header::CONTENT_DISPOSITION, "attachment; filename=\"inline-backup.json\""),
+        ],
+        body,
+    )
+        .into_response()
+}
+
+/// Restore the queue state from a backup file (replaces everything). Protected.
+/// Body is the raw JSON produced by `export_data`.
+pub async fn import_data(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: String,
+) -> ApiResult {
+    authorize(&state, &headers)?;
+    {
+        let mut store = state.store.write().await;
+        store
+            .import_json(&body)
+            .map_err(|e| (StatusCode::BAD_REQUEST, format!("invalid backup: {e}")).into_response())?;
     }
     notify(&state);
     Ok(Json(json!({ "ok": true })))

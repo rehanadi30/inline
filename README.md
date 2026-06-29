@@ -13,6 +13,12 @@ binary serves a JSON API, a real-time event stream, and two
 
 Both apps are **mobile-friendly** (responsive, touch-sized, notch-safe).
 
+It also includes opt-in **browser notifications** (when it's your turn),
+**ticket expiry** (links auto-expire after a configurable time, default 1 day),
+one-click **backup & restore** from the admin, a **history** of called numbers
+with times, **offline-tolerant** apps (service worker + health ping), and
+**Cloudflare** deployment options.
+
 It supports **multiple queue types** (e.g. `A` for 1–2 guests, `B` for 3–5),
 each with its own running number — so you get tickets like `A02` and `B07`
 depending on which kind of table is free.
@@ -93,6 +99,12 @@ cargo run            # http://localhost:8080
 
 Install Rust from <https://rustup.rs> if you don't have it.
 
+### Deploy on Cloudflare
+
+Put inline on a global HTTPS edge — via **Cloudflare Tunnel** (no open ports) or
+a **Cloudflare Worker** that serves the apps and proxies the API. HTTPS also
+unlocks the browser-notifications feature. See [CLOUDFLARE.md](CLOUDFLARE.md).
+
 ---
 
 ## Configuration
@@ -106,6 +118,9 @@ Install Rust from <https://rustup.rs> if you don't have it.
 | `ADMIN_TOKEN`        | *(empty)*          | Operator password. **Empty disables auth** (demo only). Set it before going live. |
 | `INLINE_DATA_FILE`   | `data.json`        | Where queue state is snapshotted.                                           |
 | `INLINE_CONFIG`      | `config.json`      | Path to the queue-definition file (below).                                  |
+| `INLINE_TICKET_TTL`  | `1d`               | How long a ticket/link stays valid (`30m`, `12h`, `1d`, bare seconds, or `off`). After it, the customer sees "expired" and it won't be called. |
+| `INLINE_STORAGE`     | `json`             | Storage backend: `json`, `sqlite`, `postgres`, or `mongo` (see [Storage backends](#storage-backends)). |
+| `INLINE_DATABASE_URL`| *(empty)*          | Connection string for the `sqlite` / `postgres` / `mongo` backends.         |
 | `INLINE_PUBLIC_DIR`  | `public`           | Folder containing `index.html` and `admin.html`.                            |
 
 ### `config.json` — what your queue looks like
@@ -142,6 +157,25 @@ That covers your example directly: with types `A` (1–2) and `B` (3–5), the
 operator picks the type that matches the free table and the guest gets `A02`
 or `B07` accordingly.
 
+### Storage backends
+
+By default inline stores everything in a JSON file — zero setup, perfect for a
+single site. You can point it at a database instead; the other backends are
+optional Cargo features, so the default binary stays small.
+
+| Backend   | `INLINE_STORAGE` | Build with                                  |
+|-----------|------------------|---------------------------------------------|
+| JSON file | `json` (default) | — (always available)                        |
+| SQLite    | `sqlite`         | `cargo build --release --features sqlite`   |
+| Postgres  | `postgres`       | `cargo build --release --features postgres` |
+| MongoDB   | `mongo`          | `cargo build --release --features mongo`    |
+
+Set the connection string in `INLINE_DATABASE_URL` (e.g.
+`postgres://user:pass@host:5432/inline`, `sqlite:inline.db?mode=rwc`, or
+`mongodb://host:27017` with `INLINE_DB_NAME`). Each backend stores the queue as a
+single JSON document. With Docker, enable a backend at build time with
+`--build-arg FEATURES=postgres`. See [CUSTOMIZE.md](CUSTOMIZE.md#7-storage-backends).
+
 ---
 
 ## Using it
@@ -168,6 +202,7 @@ Public (no auth):
 | `GET`  | `/api/entries/:id`   | One guest's own status (no personal data).            |
 | `GET`  | `/api/events`        | **SSE** live-update stream.                           |
 | `GET`  | `/api/qr?data=...`   | QR code (SVG) for any text/URL.                       |
+| `GET`  | `/api/health`        | Liveness check (the customer app pings this).        |
 
 Operator (require `Authorization: Bearer <ADMIN_TOKEN>` when a token is set):
 
@@ -179,6 +214,8 @@ Operator (require `Authorization: Bearer <ADMIN_TOKEN>` when a token is set):
 | `POST` | `/api/queue/:code/next`     | Finish current + call next in a type.         |
 | `POST` | `/api/queue/:code/reset`    | Clear one queue type and reset its counter.   |
 | `POST` | `/api/reset`                | Clear everything.                             |
+| `GET`  | `/api/admin/export`         | Download a full JSON backup.                  |
+| `POST` | `/api/admin/import`         | Restore from a backup (replaces all data).    |
 
 `status` is one of: `waiting`, `serving`, `done`, `skipped`, `no_show`.
 
@@ -196,13 +233,17 @@ inline/
 │   └── handlers.rs   # the HTTP/JSON/SSE/QR handlers
 ├── public/
 │   ├── index.html    # CUSTOMER app  (single file, themeable)
-│   └── admin.html    # ADMIN app     (single file, themeable)
+│   ├── admin.html    # ADMIN app     (single file, themeable)
+│   └── sw.js         # service worker (notifications + offline)
 ├── config.json       # your queue definition
+├── cloudflare/       # Cloudflare Worker (edge apps + API proxy) + wrangler.toml
 ├── .env.example      # deployment settings
 ├── Dockerfile
 ├── docker-compose.yml
 ├── README.md
-└── CUSTOMIZE.md      # theming + extending guide
+├── CUSTOMIZE.md      # theming + extending guide
+├── CLOUDFLARE.md     # deploy via Cloudflare Tunnel / Worker
+└── AGENTS.md         # context for AI coding agents
 ```
 
 ---
