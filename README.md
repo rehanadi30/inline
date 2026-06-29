@@ -35,15 +35,15 @@ depending on which kind of table is free.
        Operator (admin.html)                 Guest (index.html)
             │  add / next / skip                   │  watch my number
             ▼  REST + Bearer token                 ▼  REST (read-only)
-   ┌──────────────────────────────────────────────────────────────┐
+   ┌────────────────────────────────────────────────────────────────┐
    │                  inline backend  (Rust + axum)                 │
-   │     REST API   ·   QR code (SVG)   ·   serves both HTML apps    │
+   │     REST API   ·   QR code (SVG)   ·   serves both HTML apps   │
    │                                                                │
    │     in-memory store  ──persist──►  data.json (survives restart)│
    │            │ on every change                                   │
    │            ▼                                                   │
    │     message broker (pub/sub)  ──push──►  SSE  /api/events  ────┼──► phones
-   └──────────────────────────────────────────────────────────────┘
+   └────────────────────────────────────────────────────────────────┘
 ```
 
 ### Live updates without polling or WebSockets
@@ -71,7 +71,7 @@ Everything else stays the same.
 You only need Docker. No Rust toolchain required.
 
 ```bash
-git clone <your-repo-url> inline
+git clone https://github.com/rehanadi30/inline inline
 cd inline
 
 cp .env.example .env        # then edit ADMIN_TOKEN and INLINE_PUBLIC_URL
