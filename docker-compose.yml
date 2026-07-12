@@ -20,6 +20,14 @@ services:
       # Edit the HTML / config live without rebuilding the image:
       - ./public:/app/public
       - ./config.json:/app/config.json
-      # Queue state lives here on the host:
+      # Queue state lives here on the host. The container runs as uid 10001
+      # (non-root) — if this directory already exists owned by root from an
+      # older deployment, run `chown -R 10001 ./data` once after upgrading.
       - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "./inline", "healthcheck"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
     restart: unless-stopped

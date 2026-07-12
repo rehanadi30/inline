@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0f172a" />
+<meta name="color-scheme" content="dark" />
+<title>Now serving</title>
+
+<!--
+  TV / wall-display app: a single self-contained file with no build step.
+  Meant to be left open on a screen at the location — no auth, no personal
+  data, just queue-type name, the label currently being served, and the
+  next few labels waiting. Restyle via the :root variables below.
+-->
+
+<style>
+  :root {
+    --bg:      #0b1120;
+    --panel:   #141c2e;
+    --line:    #253145;
+    --text:    #f8fafc;
+    --muted:   #94a3b8;
+    --primary: #818cf8;
+    --good:    #4ade80;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100%;
+    padding: max(24px, env(safe-area-inset-top)) max(28px, env(safe-area-inset-right))
+             max(24px, env(safe-area-inset-bottom)) max(28px, env(safe-area-inset-left));
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; }
+  header h1 { font-size: clamp(1.4rem, 2.4vw, 2rem); letter-spacing: .3px; }
+  header .tagline { color: var(--muted); font-size: clamp(.85rem, 1.1vw, 1.05rem); margin-top: 4px; }
+  header .right { text-align: right; }
+  #clock { font-variant-numeric: tabular-nums; font-size: clamp(1.1rem, 1.8vw, 1.5rem); font-weight: 600; }
+  .pill-live { display: inline-flex; align-items: center; gap: 7px; font-size: .85rem; color: var(--muted); margin-top: 4px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+  .dot.live { background: var(--good); }
+
+  .grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 20px;
+    align-content: stretch;
+  }
+
+  .col {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    padding: 26px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .col .nm { font-size: clamp(1.1rem, 1.8vw, 1.5rem); font-weight: 700; }
+  .col .ds { color: var(--muted); font-size: clamp(.8rem, 1vw, .95rem); margin-top: 2px; }
+
+  .now-cap { color: var(--muted); text-transform: uppercase; letter-spacing: 2px; font-size: clamp(.75rem, 1vw, .9rem); margin-top: 22px; }
+  .now-val {
+    font-size: clamp(6rem, 18vw, 16rem);
+    font-weight: 800;
+    line-height: 1;
+    color: var(--good);
+    font-variant-numeric: tabular-nums;
+    margin: 6px 0 4px;
+    transition: transform .3s ease;
+  }
+  .now-val.pulse { animation: pulse .7s ease; }
+  @keyframes pulse { 0% { transform: scale(1); } 35% { transform: scale(1.08); } 100% { transform: scale(1); } }
+  .now-val.empty { color: var(--muted); font-size: clamp(2.5rem, 6vw, 4rem); }
+
+  .next-cap { color: var(--muted); text-transform: uppercase; letter-spacing: 2px; font-size: clamp(.7rem, .9vw, .85rem); margin-top: auto; padding-top: 18px; }
+  .next-list {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
+    font-size: clamp(1.3rem, 2.6vw, 2rem); font-weight: 700; color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .next-list span { background: rgba(255,255,255,.06); border-radius: 12px; padding: 4px 14px; }
+  .next-empty { color: var(--muted); font-size: clamp(.9rem, 1.2vw, 1.1rem); font-weight: 500; }
+
+  .empty-state { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.2rem; }
+</style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1 id="brand">inline</h1>
+      <div class="tagline" id="tagline"></div>
+    </div>
+    <div class="right">
+      <div id="clock">--:--</div>
+      <div class="pill-live"><span class="dot" id="liveDot" aria-hidden="true"></span><span id="liveText" role="status">connecting…</span></div>
+    </div>
+  </header>
+
+  <div class="grid" id="grid">
+    <div class="empty-state">Loading…</div>
+  </div>
+
+<script>
+  // Leave API_BASE empty when this page is served by the inline backend.
+  const API_BASE = "";
+
+  const $ = (x) => document.getElementById(x);
+  let CONFIG = null;
+  let online = true;
+  let lastServing = {};
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function setLive(on) {
+    online = on;
+    $("liveDot").className = "dot" + (on ? " live" : "");
+    $("liveText").textContent = on ? "live" : "reconnecting…";
+  }
+
+  function tickClock() {
+    $("clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  setInterval(tickClock, 1000);
+  tickClock();
+
+  async function loadConfig() {
+    try {
+      CONFIG = await (await fetch(API_BASE + "/api/config")).json();
+      $("brand").textContent = CONFIG.brand || "inline";
+      $("tagline").textContent = CONFIG.tagline || "";
+      document.title = (CONFIG.brand || "inline") + " — now serving";
+    } catch (_) {}
+  }
+
+  function renderState(types) {
+    const grid = $("grid");
+    if (!types || !types.length) {
+      grid.innerHTML = '<div class="empty-state">No queue types configured</div>';
+      return;
+    }
+    grid.innerHTML = "";
+    types.forEach((t) => {
+      const col = document.createElement("div");
+      col.className = "col";
+      const serving = t.current_serving || null;
+      const changed = lastServing[t.code] !== undefined && lastServing[t.code] !== serving && serving;
+      lastServing[t.code] = serving;
+
+      const nextHtml = (t.next_waiting && t.next_waiting.length)
+        ? t.next_waiting.map((l) => `<span>${escapeHtml(l)}</span>`).join("")
+        : '<span class="next-empty">Nobody waiting</span>';
+
+      col.innerHTML =
+        `<div class="nm">${escapeHtml(t.name || t.code)}</div>` +
+        (t.code ? `<div class="ds">${escapeHtml(t.code)}</div>` : "") +
+        `<div class="now-cap">Now serving</div>` +
+        `<div class="now-val${serving ? "" : " empty"}${changed ? " pulse" : ""}">${escapeHtml(serving || "—")}</div>` +
+        `<div class="next-cap">Next up</div>` +
+        `<div class="next-list">${nextHtml}</div>`;
+      grid.appendChild(col);
+    });
+  }
+
+  async function refresh() {
+    try {
+      const res = await fetch(API_BASE + "/api/state");
+      if (!res.ok) throw new Error("bad status");
+      const data = await res.json();
+      renderState(data.state);
+      if (!online) setLive(true);
+    } catch (_) {
+      setLive(false);
+    }
+  }
+
+  function connect() {
+    try {
+      const es = new EventSource(API_BASE + "/api/events");
+      es.onopen = () => { setLive(true); refresh(); };
+      es.onmessage = () => refresh();
+      es.onerror = () => setLive(false);
+    } catch (_) { setLive(false); }
+  }
+
+  loadConfig();
+  refresh();
+  connect();
+  setInterval(refresh, 30000);
+</script>
+</body>
+</html>

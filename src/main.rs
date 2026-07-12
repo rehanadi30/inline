@@ -40,6 +40,41 @@ fn env_or(key: &str, default: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| default.to_string())
 }
 
+/// A bind address like "0.0.0.0:8080" or "[::]:8080" tells the OS "listen on
+/// every interface" — it isn't itself a URL you can open, and most browsers
+/// refuse to navigate to a wildcard host directly. Swap it for "localhost"
+/// when printing clickable links; the real bind address is still shown on
+/// the "listening" line.
+fn browsable_host(bind: &str) -> String {
+    match bind.rsplit_once(':') {
+        Some((host, port)) if host.is_empty() || host == "0.0.0.0" || host == "[::]" => {
+            format!("localhost:{port}")
+        }
+        _ => bind.to_string(),
+    }
+}
+
+/// The API router (everything under `/api`), with `state` baked in. Split out
+/// from `main()` so handler tests can drive it directly with `tower::ServiceExt`
+/// without needing a real listener.
+pub fn build_router(state: AppState) -> Router {
+    Router::new()
+        .route("/config", get(handlers::get_config))
+        .route("/state", get(handlers::get_state))
+        .route("/health", get(handlers::health))
+        .route("/entries", get(handlers::list_entries).post(handlers::create_entry))
+        .route("/entries/:id", get(handlers::get_entry))
+        .route("/entries/:id/status", post(handlers::set_status))
+        .route("/queue/:code/next", post(handlers::next_queue))
+        .route("/queue/:code/reset", post(handlers::reset_type))
+        .route("/reset", post(handlers::reset_all))
+        .route("/admin/export", get(handlers::export_data))
+        .route("/admin/import", post(handlers::import_data))
+        .route("/events", get(handlers::events))
+        .route("/qr", get(handlers::qr))
+        .with_state(state)
+}
+
 /// Parse a ticket-TTL string like "1d", "12h", "30m", "3600" (bare = seconds),
 /// or "0"/"off"/"never" (never expire) into a number of seconds.
 fn parse_ttl(raw: &str) -> u64 {
@@ -61,10 +96,52 @@ fn parse_ttl(raw: &str) -> u64 {
     num.trim().parse::<u64>().map(|n| n * mult).unwrap_or(86_400)
 }
 
+/// Standalone healthcheck for `docker healthcheck`/compose (`./inline
+/// healthcheck`): opens a raw TCP connection to our own `/api/health`
+/// endpoint — no HTTP client dependency needed — and succeeds only on a 200
+/// response. The runtime image has no curl/wget, so this is how the
+/// container reports liveness.
+fn healthcheck_status() -> i32 {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    use std::time::Duration;
+
+    let bind = env_or("INLINE_BIND", "0.0.0.0:8080");
+    let port = bind.rsplit(':').next().unwrap_or("8080");
+    let addr = format!("127.0.0.1:{port}");
+
+    let Ok(mut stream) = TcpStream::connect(&addr) else {
+        return 1;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+    if stream
+        .write_all(b"GET /api/health HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .is_err()
+    {
+        return 1;
+    }
+    let mut buf = [0u8; 32];
+    match stream.read(&mut buf) {
+        Ok(n) if n > 0 => {
+            let head = String::from_utf8_lossy(&buf[..n]);
+            if head.starts_with("HTTP/1.0 200") || head.starts_with("HTTP/1.1 200") {
+                0
+            } else {
+                1
+            }
+        }
+        _ => 1,
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load .env if present (no-op when missing).
     dotenvy::dotenv().ok();
+
+    if std::env::args().nth(1).as_deref() == Some("healthcheck") {
+        std::process::exit(healthcheck_status());
+    }
 
     let bind = env_or("INLINE_BIND", "0.0.0.0:8080");
     let public_url = std::env::var("INLINE_PUBLIC_URL").unwrap_or_default();
@@ -102,21 +179,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // API routes (state baked in here so the outer router stays stateless).
-    let api = Router::new()
-        .route("/config", get(handlers::get_config))
-        .route("/state", get(handlers::get_state))
-        .route("/health", get(handlers::health))
-        .route("/entries", get(handlers::list_entries).post(handlers::create_entry))
-        .route("/entries/:id", get(handlers::get_entry))
-        .route("/entries/:id/status", post(handlers::set_status))
-        .route("/queue/:code/next", post(handlers::next_queue))
-        .route("/queue/:code/reset", post(handlers::reset_type))
-        .route("/reset", post(handlers::reset_all))
-        .route("/admin/export", get(handlers::export_data))
-        .route("/admin/import", post(handlers::import_data))
-        .route("/events", get(handlers::events))
-        .route("/qr", get(handlers::qr))
-        .with_state(state);
+    let api = build_router(state);
 
     // Serve the two single-file apps (public/index.html, public/admin.html)
     // for everything that isn't an /api route.
@@ -132,9 +195,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(&bind).await?;
 
     println!("\n  inline is running");
+    let browsable = browsable_host(&bind);
     println!("  ├─ listening    http://{bind}");
-    println!("  ├─ admin app    http://{bind}/admin.html");
-    println!("  ├─ customer app http://{bind}/");
+    println!("  ├─ admin app    http://{browsable}/admin.html");
+    println!("  ├─ customer app http://{browsable}/");
+    println!("  ├─ display app  http://{browsable}/display.html");
     println!(
         "  ├─ public URL   {}",
         if public_url.is_empty() { "(admin origin)".into() } else { public_url }
@@ -152,4 +217,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{browsable_host, parse_ttl};
+
+    #[test]
+    fn browsable_host_swaps_wildcard_for_localhost() {
+        assert_eq!(browsable_host("0.0.0.0:8080"), "localhost:8080");
+        assert_eq!(browsable_host("[::]:8080"), "localhost:8080");
+        assert_eq!(browsable_host("127.0.0.1:8080"), "127.0.0.1:8080");
+        assert_eq!(browsable_host("queue.example.com:8080"), "queue.example.com:8080");
+    }
+
+    #[test]
+    fn parse_ttl_units() {
+        assert_eq!(parse_ttl("1d"), 86_400);
+        assert_eq!(parse_ttl("12h"), 43_200);
+        assert_eq!(parse_ttl("30m"), 1_800);
+        assert_eq!(parse_ttl("3600"), 3_600);
+        assert_eq!(parse_ttl("45s"), 45);
+    }
+
+    #[test]
+    fn parse_ttl_disabled_values() {
+        assert_eq!(parse_ttl("0"), 0);
+        assert_eq!(parse_ttl("off"), 0);
+        assert_eq!(parse_ttl("never"), 0);
+        assert_eq!(parse_ttl(""), 0);
+    }
+
+    #[test]
+    fn parse_ttl_garbage_falls_back_to_default() {
+        assert_eq!(parse_ttl("not-a-number"), 86_400);
+    }
 }

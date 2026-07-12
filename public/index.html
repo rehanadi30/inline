@@ -130,7 +130,11 @@
 
   .empty { color:#fff; text-align:center; max-width: 340px; }
   .empty h2 { margin-bottom: 8px; }
-  .empty p { opacity:.85; }
+  .empty p { opacity:.85; margin-bottom: 16px; }
+  .empty .retry-btn {
+    padding: 11px 20px; border: none; border-radius: 12px;
+    background: #fff; color: var(--text); font: inherit; font-weight: 700; cursor: pointer;
+  }
 
   @media (max-width: 480px) {
     .card { padding: 26px 20px 22px; border-radius: 18px; }
@@ -152,9 +156,9 @@
   <main id="card" class="card" hidden>
     <div class="type-name" id="typeName">—</div>
     <div class="label" id="label">—</div>
-    <div class="pill" id="statusPill">—</div>
+    <div class="pill" id="statusPill" role="status" aria-live="polite">—</div>
 
-    <div class="headline" id="headline"></div>
+    <div class="headline" id="headline" role="status" aria-live="polite"></div>
 
     <div class="stats">
       <div class="stat">
@@ -170,14 +174,20 @@
     <button id="notifyBtn" class="notify-btn" hidden>Notify me when it's my turn</button>
 
     <div class="foot">
-      <span class="dot" id="liveDot"></span>
-      <span id="liveText">connecting…</span>
+      <span class="dot" id="liveDot" aria-hidden="true"></span>
+      <span id="liveText" role="status">connecting…</span>
     </div>
   </main>
 
   <div id="empty" class="empty" hidden>
     <h2>No ticket found</h2>
     <p>Please scan the QR code or open the link the staff gave you.</p>
+  </div>
+
+  <div id="error" class="empty" hidden role="alert">
+    <h2>Can't reach the queue</h2>
+    <p>We couldn't load your ticket. Check your connection and try again.</p>
+    <button type="button" class="retry-btn" id="retryBtn">Retry</button>
   </div>
 
 <script>
@@ -208,6 +218,7 @@
   let swReg = null;
   let lastStatus = null, lastAhead = null;
   let online = true;
+  let loaded = false;
 
   async function loadConfig() {
     try {
@@ -292,6 +303,8 @@
   }
 
   function render(v) {
+    loaded = true;
+    $("error").hidden = true;
     $("card").hidden = false;
     $("typeName").textContent = v.type_name || v.type_code;
     $("label").textContent = v.label;
@@ -342,12 +355,22 @@
       const res = await fetch(API_BASE + "/api/entries/" + encodeURIComponent(id));
       if (!res.ok) { showEmpty(); return; }
       render(await res.json());
-    } catch (_) {}
+    } catch (_) {
+      if (!loaded) showError();
+    }
   }
 
   function showEmpty() {
+    $("error").hidden = true;
     $("card").hidden = true;
     $("empty").hidden = false;
+  }
+
+  function showError() {
+    $("card").hidden = true;
+    $("empty").hidden = true;
+    $("error").hidden = false;
+    setLive(false);
   }
 
   // Live updates over a single SSE stream; on each nudge we refetch our status.
@@ -372,6 +395,8 @@
     } catch (_) { online = false; setLive(false); }
   }
   setInterval(pingHealth, 120000);
+
+  $("retryBtn").onclick = () => refresh();
 
   if (!id) {
     showEmpty();

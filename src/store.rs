@@ -94,15 +94,20 @@ pub struct TypeState {
     pub name: String,
     pub current_serving: Option<String>,
     pub waiting: usize,
+    /// Labels of up to the next 5 waiting guests, lowest number first. Labels
+    /// carry no personal data, so this is safe on the unauthenticated board.
+    pub next_waiting: Vec<String>,
 }
+
+/// How many upcoming labels `TypeState.next_waiting` shows.
+const NEXT_WAITING_LIMIT: usize = 5;
 
 fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
+/// Zero-pads to 2 digits (`A01`, `A42`); numbers past 99 simply widen the
+/// label (`A100`) rather than truncating, so this never loses information.
 fn make_label(code: &str, number: u32) -> String {
     format!("{code}{number:02}")
 }
@@ -116,12 +121,7 @@ fn is_expired(created_at: u64, ttl_secs: u64, now: u64) -> bool {
 impl Store {
     /// Build the in-memory store from a snapshot loaded by a storage backend.
     pub fn from_snapshot(snap: Snapshot) -> Self {
-        Store {
-            entries: snap.entries,
-            counters: snap.counters,
-            serving: snap.serving,
-            tx: None,
-        }
+        Store { entries: snap.entries, counters: snap.counters, serving: snap.serving, tx: None }
     }
 
     /// Clone the current state into a `Snapshot` (for persistence / backup).
@@ -213,11 +213,8 @@ impl Store {
 
     /// Force a specific entry into a status (skip, recall, mark serving, …).
     pub fn set_status(&mut self, id: &str, status: Status) -> bool {
-        let Some((code, number)) = self
-            .entries
-            .iter()
-            .find(|e| e.id == id)
-            .map(|e| (e.type_code.clone(), e.number))
+        let Some((code, number)) =
+            self.entries.iter().find(|e| e.id == id).map(|e| (e.type_code.clone(), e.number))
         else {
             return false;
         };
@@ -275,18 +272,11 @@ impl Store {
     }
 
     pub fn waiting_count(&self, code: &str) -> usize {
-        self.entries
-            .iter()
-            .filter(|e| e.type_code == code && e.status == Status::Waiting)
-            .count()
+        self.entries.iter().filter(|e| e.type_code == code && e.status == Status::Waiting).count()
     }
 
     pub fn current_serving_label(&self, code: &str) -> Option<String> {
-        self.serving
-            .get(code)
-            .copied()
-            .flatten()
-            .map(|n| make_label(code, n))
+        self.serving.get(code).copied().flatten().map(|n| make_label(code, n))
     }
 
     /// Build the customer-safe view for one guest. `ttl_secs` (0 = never) marks
@@ -319,15 +309,33 @@ impl Store {
         })
     }
 
-    /// Public per-type board (no personal data).
-    pub fn state(&self, cfg: &Config) -> Vec<TypeState> {
+    /// Public per-type board (no personal data). `ttl_secs` (0 = never)
+    /// excludes expired tickets from `next_waiting`.
+    pub fn state(&self, cfg: &Config, ttl_secs: u64) -> Vec<TypeState> {
+        let now = now_ms();
         cfg.queue_types
             .iter()
-            .map(|t| TypeState {
-                code: t.code.clone(),
-                name: t.name.clone(),
-                current_serving: self.current_serving_label(&t.code),
-                waiting: self.waiting_count(&t.code),
+            .map(|t| {
+                let mut next: Vec<&Entry> = self
+                    .entries
+                    .iter()
+                    .filter(|e| {
+                        e.type_code == t.code
+                            && e.status == Status::Waiting
+                            && !is_expired(e.created_at, ttl_secs, now)
+                    })
+                    .collect();
+                next.sort_by_key(|e| e.number);
+                let next_waiting =
+                    next.into_iter().take(NEXT_WAITING_LIMIT).map(|e| e.label.clone()).collect();
+
+                TypeState {
+                    code: t.code.clone(),
+                    name: t.name.clone(),
+                    current_serving: self.current_serving_label(&t.code),
+                    waiting: self.waiting_count(&t.code),
+                    next_waiting,
+                }
             })
             .collect()
     }
@@ -353,5 +361,177 @@ impl Store {
         if let Some(tx) = &self.tx {
             let _ = tx.send_replace(self.snapshot());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use serde_json::json;
+
+    fn fields(obj: Value) -> Map<String, Value> {
+        obj.as_object().cloned().unwrap_or_default()
+    }
+
+    #[test]
+    fn make_label_padding() {
+        assert_eq!(make_label("A", 7), "A07");
+        assert_eq!(make_label("A", 42), "A42");
+        assert_eq!(make_label("A", 123), "A123");
+    }
+
+    #[test]
+    fn create_assigns_sequential_numbers_per_type() {
+        let mut store = Store::default();
+        let a1 = store.create("A", Map::new());
+        let a2 = store.create("A", Map::new());
+        let b1 = store.create("B", Map::new());
+        assert_eq!(a1.label, "A01");
+        assert_eq!(a2.label, "A02");
+        assert_eq!(b1.label, "B01");
+    }
+
+    #[test]
+    fn call_next_orders_by_lowest_number() {
+        let mut store = Store::default();
+        let a1 = store.create("A", Map::new());
+        let a2 = store.create("A", Map::new());
+
+        let called = store.call_next("A", 0);
+        assert_eq!(called, Some(a1.id.clone()));
+        assert_eq!(store.entries.iter().find(|e| e.id == a1.id).unwrap().status, Status::Serving);
+
+        let called2 = store.call_next("A", 0);
+        assert_eq!(called2, Some(a2.id.clone()));
+        assert_eq!(store.entries.iter().find(|e| e.id == a1.id).unwrap().status, Status::Done);
+        assert_eq!(store.entries.iter().find(|e| e.id == a2.id).unwrap().status, Status::Serving);
+    }
+
+    #[test]
+    fn call_next_empty_returns_none_and_clears_serving() {
+        let mut store = Store::default();
+        assert_eq!(store.call_next("A", 0), None);
+        assert_eq!(store.serving.get("A").copied().flatten(), None);
+    }
+
+    #[test]
+    fn call_next_skips_expired_tickets() {
+        let mut store = Store::default();
+        let a1 = store.create("A", Map::new());
+        store.entries.iter_mut().find(|e| e.id == a1.id).unwrap().created_at = 0;
+        assert_eq!(store.call_next("A", 1), None);
+    }
+
+    #[test]
+    fn set_status_serving_demotes_previous() {
+        let mut store = Store::default();
+        let a1 = store.create("A", Map::new());
+        let a2 = store.create("A", Map::new());
+        store.set_status(&a1.id, Status::Serving);
+        assert_eq!(store.serving.get("A").copied().flatten(), Some(1));
+        store.set_status(&a2.id, Status::Serving);
+        assert_eq!(store.entries.iter().find(|e| e.id == a1.id).unwrap().status, Status::Done);
+        assert_eq!(store.serving.get("A").copied().flatten(), Some(2));
+    }
+
+    #[test]
+    fn set_status_away_from_serving_clears_slot() {
+        let mut store = Store::default();
+        let a1 = store.create("A", Map::new());
+        store.set_status(&a1.id, Status::Serving);
+        assert_eq!(store.serving.get("A").copied().flatten(), Some(1));
+        store.set_status(&a1.id, Status::Done);
+        assert_eq!(store.serving.get("A").copied().flatten(), None);
+    }
+
+    #[test]
+    fn set_status_unknown_id_returns_false() {
+        let mut store = Store::default();
+        assert!(!store.set_status("nope", Status::Done));
+    }
+
+    #[test]
+    fn recall_flow() {
+        let mut store = Store::default();
+        let a1 = store.create("A", Map::new());
+        assert!(store.set_status(&a1.id, Status::Skipped));
+        assert_eq!(store.entries[0].status, Status::Skipped);
+        assert!(store.set_status(&a1.id, Status::Waiting));
+        assert_eq!(store.entries[0].status, Status::Waiting);
+        assert_eq!(store.call_next("A", 0), Some(a1.id));
+    }
+
+    #[test]
+    fn reset_single_type_keeps_others() {
+        let mut store = Store::default();
+        store.create("A", Map::new());
+        store.create("B", Map::new());
+        store.reset(Some("A"));
+        assert_eq!(store.entries.len(), 1);
+        assert_eq!(store.entries[0].type_code, "B");
+        assert_eq!(store.counters.get("A").copied(), Some(0));
+    }
+
+    #[test]
+    fn reset_all_clears_everything() {
+        let mut store = Store::default();
+        store.create("A", Map::new());
+        store.create("B", Map::new());
+        store.reset(None);
+        assert!(store.entries.is_empty());
+        assert!(store.counters.is_empty());
+        assert!(store.serving.is_empty());
+    }
+
+    #[test]
+    fn public_view_ahead_excludes_expired_and_higher_numbers() {
+        let mut store = Store::default();
+        let cfg = Config::default();
+        let a1 = store.create("A", Map::new());
+        store.create("A", Map::new());
+        let a3 = store.create("A", Map::new());
+        store.entries.iter_mut().find(|e| e.id == a1.id).unwrap().created_at = 0;
+
+        let view = store.public_view(&a3.id, &cfg, 1).unwrap();
+        assert_eq!(view.ahead, 1); // a1 expired (excluded), a2 still counts
+    }
+
+    #[test]
+    fn public_view_expired_flag() {
+        let mut store = Store::default();
+        let cfg = Config::default();
+        let a1 = store.create("A", Map::new());
+        store.entries.iter_mut().find(|e| e.id == a1.id).unwrap().created_at = 0;
+
+        let view = store.public_view(&a1.id, &cfg, 1).unwrap();
+        assert!(view.expired);
+    }
+
+    #[test]
+    fn export_import_roundtrip() {
+        let mut store = Store::default();
+        store.create("A", fields(json!({ "name": "Alice" })));
+
+        let snapshot_json = store.export_json();
+        let mut restored = Store::default();
+        restored.import_json(&snapshot_json).unwrap();
+
+        assert_eq!(restored.entries.len(), 1);
+        assert_eq!(restored.entries[0].fields.get("name").unwrap(), "Alice");
+    }
+
+    #[test]
+    fn state_next_waiting_ordered_and_excludes_expired() {
+        let mut store = Store::default();
+        let cfg = Config::default();
+        let a1 = store.create("A", Map::new());
+        let a2 = store.create("A", Map::new());
+        let a3 = store.create("A", Map::new());
+        store.entries.iter_mut().find(|e| e.id == a2.id).unwrap().created_at = 0;
+
+        let state = store.state(&cfg, 1);
+        let a_state = state.iter().find(|s| s.code == "A").unwrap();
+        assert_eq!(a_state.next_waiting, vec![a1.label.clone(), a3.label.clone()]);
     }
 }

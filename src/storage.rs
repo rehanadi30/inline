@@ -41,9 +41,9 @@ impl Storage {
             }
             kind @ ("sqlite" | "postgres" | "postgresql" | "pg") => connect_sql(kind).await,
             "mongo" | "mongodb" => connect_mongo().await,
-            other => fail(&format!(
-                "unknown INLINE_STORAGE '{other}' (use json|sqlite|postgres|mongo)"
-            )),
+            other => {
+                fail(&format!("unknown INLINE_STORAGE '{other}' (use json|sqlite|postgres|mongo)"))
+            }
         }
     }
 
@@ -107,10 +107,7 @@ impl JsonBackend {
         };
         // Atomic: write a temp file then rename over the target.
         let tmp = format!("{}.tmp", self.path);
-        if std::fs::write(&tmp, json)
-            .and_then(|_| std::fs::rename(&tmp, &self.path))
-            .is_err()
-        {
+        if std::fs::write(&tmp, json).and_then(|_| std::fs::rename(&tmp, &self.path)).is_err() {
             eprintln!("[storage] failed to write {}", self.path);
         }
     }
@@ -141,10 +138,11 @@ async fn connect_sql(kind: &str) -> Storage {
         Ok(p) => p,
         Err(e) => fail(&format!("could not connect to database: {e}")),
     };
-    if let Err(e) =
-        sqlx::query("CREATE TABLE IF NOT EXISTS inline_state (id INTEGER PRIMARY KEY, data TEXT NOT NULL)")
-            .execute(&pool)
-            .await
+    if let Err(e) = sqlx::query(
+        "CREATE TABLE IF NOT EXISTS inline_state (id INTEGER PRIMARY KEY, data TEXT NOT NULL)",
+    )
+    .execute(&pool)
+    .await
     {
         fail(&format!("could not create table: {e}"));
     }

@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
 <title>inline — operator console</title>
 
 <!--
@@ -21,11 +22,54 @@
     --line:      #e2e8f0;
     --primary:   #6366f1;
     --primary-text: #ffffff;
+    --primary-shadow: rgba(99,102,241,.15);
     --good:      #16a34a;
     --warn:      #d97706;
     --danger:    #dc2626;
+    --input-bg:  #ffffff;
+    --btn-ghost-bg: #f1f5f9;
+    --good-bg:   #dcfce7;
+    --warn-bg:   #fef3c7;
+    --danger-bg: #fee2e2;
+    --serving-now-bg: #f8fafc;
+    --entry-serving-bg: #f0fdf4;
+    --entry-hold-bg: #fffbeb;
+    --entry-hold-border: #fde68a;
+    --toast-bg:  #0f172a;
+    --toast-text: #ffffff;
+    --overlay-bg: rgba(15,23,42,.6);
+    --lightbox-bg: rgba(15,23,42,.78);
     --radius:    16px;
     --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:        #0f172a;
+      --panel:     #1e293b;
+      --text:      #f1f5f9;
+      --muted:     #94a3b8;
+      --line:      #334155;
+      --primary:   #818cf8;
+      --primary-text: #0f172a;
+      --primary-shadow: rgba(129,140,248,.25);
+      --good:      #4ade80;
+      --warn:      #fbbf24;
+      --danger:    #f87171;
+      --input-bg:  #0f172a;
+      --btn-ghost-bg: #334155;
+      --good-bg:   rgba(22,163,74,.25);
+      --warn-bg:   rgba(217,119,6,.25);
+      --danger-bg: rgba(220,38,38,.25);
+      --serving-now-bg: #0f172a;
+      --entry-serving-bg: rgba(22,163,74,.12);
+      --entry-hold-bg: rgba(217,119,6,.12);
+      --entry-hold-border: rgba(251,191,36,.4);
+      --toast-bg:  #f1f5f9;
+      --toast-text: #0f172a;
+      --overlay-bg: rgba(0,0,0,.7);
+      --lightbox-bg: rgba(0,0,0,.85);
+    }
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -52,7 +96,7 @@
   label.fld .req { color: var(--danger); }
   input, select, textarea {
     width: 100%; padding: 10px 12px; border: 1px solid var(--line);
-    border-radius: 10px; font: inherit; background: #fff; color: var(--text);
+    border-radius: 10px; font: inherit; background: var(--input-bg); color: var(--text);
   }
   textarea { resize: vertical; min-height: 64px; }
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); outline-offset: 0; border-color: var(--primary); }
@@ -60,24 +104,26 @@
   .types { display: flex; flex-wrap: wrap; gap: 8px; }
   .type-btn {
     flex: 1 1 calc(50% - 8px); cursor: pointer; text-align: left;
-    border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #fff;
+    border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--input-bg);
   }
   .type-btn .code { font-weight: 800; color: var(--primary); }
-  .type-btn .nm { font-size: .82rem; }
+  .type-btn .nm { font-size: .82rem; color: var(--text); }
   .type-btn .ds { font-size: .72rem; color: var(--muted); }
-  .type-btn.sel { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
+  .type-btn.sel { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-shadow); }
 
   button { font: inherit; cursor: pointer; border: none; border-radius: 10px; }
   .btn-primary { background: var(--primary); color: var(--primary-text); padding: 12px 16px; width: 100%; font-weight: 700; margin-top: 16px; }
   .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
   .btn-sm { padding: 6px 10px; font-size: .8rem; font-weight: 600; }
-  .btn-ghost { background: #f1f5f9; color: var(--text); }
-  .btn-good { background: #dcfce7; color: var(--good); }
-  .btn-warn { background: #fef3c7; color: var(--warn); }
-  .btn-danger { background: #fee2e2; color: var(--danger); }
+  .btn-ghost { background: var(--btn-ghost-bg); color: var(--text); }
+  .btn-good { background: var(--good-bg); color: var(--good); }
+  .btn-warn { background: var(--warn-bg); color: var(--warn); }
+  .btn-danger { background: var(--danger-bg); color: var(--danger); }
 
   .result { text-align: center; }
   .result .big { font-size: 3.2rem; font-weight: 800; color: var(--primary); margin: 4px 0; }
+  .qr-trigger { background: none; border: none; padding: 0; border-radius: 12px; }
+  .qr-trigger:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
   .result img { width: 200px; height: 200px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:8px; cursor: zoom-in; }
   .qr-hint { font-size: .76rem; color: var(--muted); margin-top: 4px; }
   .linkrow { display: flex; gap: 8px; margin: 14px 0 6px; }
@@ -88,7 +134,7 @@
   .col-head { padding: 14px; border-bottom: 1px solid var(--line); }
   .col-head .nm { font-weight: 700; }
   .col-head .ds { font-size: .76rem; color: var(--muted); }
-  .serving-now { margin-top: 10px; background: #f8fafc; border-radius: 12px; padding: 10px; text-align: center; }
+  .serving-now { margin-top: 10px; background: var(--serving-now-bg); border-radius: 12px; padding: 10px; text-align: center; }
   .serving-now .lbl { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
   .serving-now .val { font-size: 2rem; font-weight: 800; color: var(--good); font-variant-numeric: tabular-nums; }
   .col-actions { display: flex; gap: 8px; padding: 0 14px 12px; }
@@ -97,8 +143,8 @@
   .list { padding: 6px 10px 12px; display: flex; flex-direction: column; gap: 8px; max-height: 460px; overflow-y: auto; }
   .group-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 8px 4px 2px; }
   .q-entry { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
-  .q-entry.serving { border-color: var(--good); background: #f0fdf4; }
-  .q-entry.skipped, .q-entry.no_show { opacity: .8; background: #fffbeb; border-color: #fde68a; }
+  .q-entry.serving { border-color: var(--good); background: var(--entry-serving-bg); }
+  .q-entry.skipped, .q-entry.no_show { opacity: .8; background: var(--entry-hold-bg); border-color: var(--entry-hold-border); }
   .q-num { font-weight: 800; color: var(--primary); font-variant-numeric: tabular-nums; min-width: 42px; }
   .q-info { flex: 1; min-width: 0; }
   .q-title { font-weight: 600; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -107,17 +153,17 @@
   .empty-note { color: var(--muted); font-size: .85rem; padding: 14px 4px; text-align: center; }
 
   .pill-live { display: inline-flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--muted); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: #cbd5e1; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
   .dot.live { background: var(--good); }
 
-  .overlay { position: fixed; inset: 0; background: rgba(15,23,42,.6); display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+  .overlay { position: fixed; inset: 0; background: var(--overlay-bg); display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
   .overlay.show { display: flex; }
   .login { background: var(--panel); border-radius: var(--radius); padding: 26px; width: 100%; max-width: 360px; }
   .login h2 { margin-bottom: 6px; }
   .login p { color: var(--muted); font-size: .85rem; margin-bottom: 14px; }
   .login .err { color: var(--danger); font-size: .82rem; margin-top: 8px; min-height: 1em; }
 
-  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: .85rem; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--toast-bg); color: var(--toast-text); padding: 10px 16px; border-radius: 10px; font-size: .85rem; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
 
   .danger-zone { margin-top: 20px; text-align: right; }
@@ -128,7 +174,7 @@
     position: fixed; inset: 0; z-index: 60;
     display: none; align-items: center; justify-content: center;
     padding: 24px;
-    background: rgba(15,23,42,.78);
+    background: var(--lightbox-bg);
     -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
     opacity: 0; transition: opacity .25s ease;
     cursor: zoom-out;
@@ -167,9 +213,9 @@
   .hist-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hist-wait { color: var(--muted); font-size: .76rem; }
   .hist-badge { font-size: .7rem; padding: 2px 8px; border-radius: 999px; text-transform: capitalize; }
-  .badge-done { background: #f1f5f9; color: var(--muted); }
-  .badge-serving { background: #dcfce7; color: var(--good); }
-  .badge-skipped, .badge-no_show { background: #fef3c7; color: var(--warn); }
+  .badge-done { background: var(--btn-ghost-bg); color: var(--muted); }
+  .badge-serving { background: var(--good-bg); color: var(--good); }
+  .badge-skipped, .badge-no_show { background: var(--warn-bg); color: var(--warn); }
   .tools { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
   .filebtn { cursor: pointer; display: inline-flex; align-items: center; }
 </style>
@@ -182,7 +228,7 @@
     <div class="sub">Operator console</div>
   </div>
   <div class="right">
-    <span class="pill-live"><span class="dot" id="liveDot"></span><span id="liveText">connecting…</span></span>
+    <span class="pill-live"><span class="dot" id="liveDot" aria-hidden="true"></span><span id="liveText" role="status">connecting…</span></span>
     <button class="btn-sm btn-ghost" id="signout" hidden>Sign out</button>
   </div>
 </header>
@@ -204,7 +250,9 @@
     <div id="resultView" class="result" hidden>
       <div style="color:var(--muted);font-size:.82rem;font-weight:600;">Added — give this to the guest</div>
       <div class="big" id="resLabel">A01</div>
-      <img id="resQr" alt="QR code" title="Tap to enlarge" />
+      <button type="button" class="qr-trigger" id="qrTrigger" aria-label="Enlarge QR code">
+        <img id="resQr" alt="QR code" title="Tap to enlarge" />
+      </button>
       <div class="qr-hint">Tap the QR to enlarge</div>
       <div class="linkrow">
         <input id="resLink" readonly />
@@ -242,9 +290,9 @@
   </div>
 </div>
 
-<div class="qr-lightbox" id="qrLightbox">
+<div class="qr-lightbox" id="qrLightbox" role="dialog" aria-modal="true" aria-label="Enlarged QR code" tabindex="-1">
   <img id="qrBig" alt="QR code enlarged" />
-  <div class="cap">Tap anywhere to close</div>
+  <div class="cap">Tap anywhere or press Escape to close</div>
 </div>
 
 <div id="toast"></div>
@@ -268,20 +316,31 @@
     if (token) h["Authorization"] = "Bearer " + token;
     return h;
   }
-  async function apiGet(path) {
-    const res = await fetch(API_BASE + path, { headers: authHeaders() });
+  // Every authenticated request goes through here so a 401 is handled in
+  // exactly one place, regardless of whether the caller wants JSON or a blob.
+  async function apiFetch(path, opts) {
+    const res = await fetch(API_BASE + path, opts);
     if (res.status === 401) { handle401(); throw new Error("unauthorized"); }
+    return res;
+  }
+  async function apiGet(path) {
+    const res = await apiFetch(path, { headers: authHeaders() });
     return res.json();
   }
   async function apiSend(path, method, body) {
-    const res = await fetch(API_BASE + path, {
+    const res = await apiFetch(path, {
       method,
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: body ? JSON.stringify(body) : undefined,
     });
-    if (res.status === 401) { handle401(); throw new Error("unauthorized"); }
     if (!res.ok) { toast("Error: " + (await res.text())); throw new Error("request failed"); }
     return res.json();
+  }
+  // Runs an apiSend action, turning a network/offline failure into a toast
+  // instead of an unhandled rejection. Returns null on any failure.
+  async function apiAction(path, method, body) {
+    try { return await apiSend(path, method, body); }
+    catch (e) { if (isNetErr(e)) toast("Offline — action not saved"); return null; }
   }
 
   // Auth
@@ -311,11 +370,13 @@
     CONFIG.queue_types.forEach((t, i) => {
       const b = document.createElement("button");
       b.type = "button"; b.className = "type-btn" + (i === 0 ? " sel" : "");
-      b.innerHTML = `<div class="code">${t.code}</div><div class="nm">${t.name || ""}</div><div class="ds">${t.description || ""}</div>`;
+      b.innerHTML = `<div class="code">${escapeHtml(t.code)}</div><div class="nm">${escapeHtml(t.name || "")}</div><div class="ds">${escapeHtml(t.description || "")}</div>`;
+      b.setAttribute("aria-pressed", i === 0 ? "true" : "false");
       b.onclick = () => {
         selectedType = t.code;
-        [...box.children].forEach((c) => c.classList.remove("sel"));
+        [...box.children].forEach((c) => { c.classList.remove("sel"); c.setAttribute("aria-pressed", "false"); });
         b.classList.add("sel");
+        b.setAttribute("aria-pressed", "true");
       };
       box.appendChild(b);
     });
@@ -327,7 +388,7 @@
     CONFIG.fields.forEach((f) => {
       const label = document.createElement("label");
       label.className = "fld";
-      label.innerHTML = `${f.label}${f.required ? ' <span class="req">*</span>' : ""}`;
+      label.innerHTML = `${escapeHtml(f.label)}${f.required ? ' <span class="req">*</span>' : ""}`;
       box.appendChild(label);
 
       let input;
@@ -388,9 +449,18 @@
   };
 
   // QR enlarge
-  function openQr() { $("qrBig").src = $("resQr").src; $("qrLightbox").classList.add("show"); }
-  function closeQr() { $("qrLightbox").classList.remove("show"); }
-  $("resQr").onclick = openQr;
+  let qrReturnFocus = null;
+  function openQr() {
+    qrReturnFocus = document.activeElement;
+    $("qrBig").src = $("resQr").src;
+    $("qrLightbox").classList.add("show");
+    $("qrLightbox").focus();
+  }
+  function closeQr() {
+    $("qrLightbox").classList.remove("show");
+    if (qrReturnFocus) { qrReturnFocus.focus(); qrReturnFocus = null; }
+  }
+  $("qrTrigger").onclick = openQr;
   $("qrLightbox").onclick = closeQr;
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeQr(); });
 
@@ -414,7 +484,7 @@
     const el = document.createElement("div");
     el.className = "q-entry " + e.status;
     el.innerHTML =
-      `<div class="q-num">${e.label}</div>` +
+      `<div class="q-num">${escapeHtml(e.label)}</div>` +
       `<div class="q-info"><div class="q-title">${escapeHtml(title)}</div>` +
       (sub ? `<div class="q-sub">${escapeHtml(sub)}</div>` : "") + `</div>` +
       `<div class="q-actions"></div>`;
@@ -442,38 +512,36 @@
   function isNetErr(e) { return !e || (e.message !== "unauthorized" && e.message !== "request failed"); }
 
   async function act(id, status) {
-    try { await apiSend("/api/entries/" + encodeURIComponent(id) + "/status", "POST", { status }); }
-    catch (e) { if (isNetErr(e)) toast("Offline — action not saved"); return; }
+    const r = await apiAction("/api/entries/" + encodeURIComponent(id) + "/status", "POST", { status });
+    if (r === null) return;
     loadBoard();
   }
 
   async function callNext(code) {
-    let r;
-    try { r = await apiSend("/api/queue/" + encodeURIComponent(code) + "/next", "POST"); }
-    catch (e) { if (isNetErr(e)) toast("Offline — action not saved"); return; }
+    const r = await apiAction("/api/queue/" + encodeURIComponent(code) + "/next", "POST");
+    if (r === null) return;
     toast(r.called ? "Called next" : "No one waiting");
     loadBoard();
   }
 
   async function resetType(code) {
     if (!confirm("Clear queue " + code + " and reset its numbers?")) return;
-    try { await apiSend("/api/queue/" + encodeURIComponent(code) + "/reset", "POST"); }
-    catch (e) { if (isNetErr(e)) toast("Offline — action not saved"); return; }
+    const r = await apiAction("/api/queue/" + encodeURIComponent(code) + "/reset", "POST");
+    if (r === null) return;
     loadBoard();
   }
 
   $("resetAll").onclick = async () => {
     if (!confirm("Clear ALL queues and reset every number? This cannot be undone.")) return;
-    try { await apiSend("/api/reset", "POST"); }
-    catch (e) { if (isNetErr(e)) toast("Offline — action not saved"); return; }
+    const r = await apiAction("/api/reset", "POST");
+    if (r === null) return;
     loadBoard();
   };
 
   // Backup
   $("backupBtn").onclick = async () => {
     try {
-      const res = await fetch(API_BASE + "/api/admin/export", { headers: authHeaders() });
-      if (res.status === 401) { handle401(); return; }
+      const res = await apiFetch("/api/admin/export", { headers: authHeaders() });
       if (!res.ok) { toast("Backup failed"); return; }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -483,7 +551,7 @@
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
       toast("Backup downloaded");
-    } catch (_) { toast("Offline — can't back up now"); }
+    } catch (e) { if (isNetErr(e)) toast("Offline — can't back up now"); }
   };
   $("restoreInput").onchange = async (e) => {
     const file = e.target.files[0];
@@ -492,16 +560,15 @@
     try {
       const text = await file.text();
       JSON.parse(text); // validate locally before sending
-      const res = await fetch(API_BASE + "/api/admin/import", {
+      const res = await apiFetch("/api/admin/import", {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: text,
       });
-      if (res.status === 401) { handle401(); return; }
       if (!res.ok) { toast("Restore failed: " + (await res.text())); return; }
       toast("Backup restored");
       loadBoard();
-    } catch (_) { toast("Invalid backup file"); }
+    } catch (e) { if (isNetErr(e)) toast("Invalid backup file"); }
     finally { e.target.value = ""; }
   };
 
@@ -527,7 +594,7 @@
         `<div class="col-head">
            <div class="nm">${t.code} · ${escapeHtml(t.name || "")}</div>
            <div class="ds">${escapeHtml(t.description || "")}</div>
-           <div class="serving-now"><div class="lbl">Now serving</div><div class="val">${st.current_serving || "—"}</div></div>
+           <div class="serving-now"><div class="lbl">Now serving</div><div class="val">${escapeHtml(st.current_serving || "—")}</div></div>
          </div>
          <div class="col-actions">
            <button class="btn-primary btn-next">Call next (${waiting.length})</button>
@@ -590,7 +657,7 @@
       row.className = "hist-row";
       row.innerHTML =
         `<span class="hist-time">${fmtTime(when)}</span>` +
-        `<span class="hist-label">${e.label}</span>` +
+        `<span class="hist-label">${escapeHtml(e.label)}</span>` +
         `<span class="hist-name">${escapeHtml(title)}</span>` +
         `<span class="hist-wait">${wait}</span>` +
         `<span class="hist-badge badge-${e.status}">${e.status.replace("_", "-")}</span>`;

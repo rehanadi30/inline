@@ -10,8 +10,12 @@ binary serves a JSON API, a real-time event stream, and two
 - **Customer app** — the guest sees their number, who's being served now, and
   how many are ahead — updating **live**, with no manual refresh. Guests can
   opt in to a **browser notification** for when it's their turn.
+- **Display app** — a no-auth, high-contrast "now serving" board meant to be
+  left open on a TV or monitor at the location, updating live for everyone in
+  the room.
 
-Both apps are **mobile-friendly** (responsive, touch-sized, notch-safe).
+Both the admin and customer apps are **mobile-friendly** (responsive,
+touch-sized, notch-safe).
 
 It also includes opt-in **browser notifications** (when it's your turn),
 **ticket expiry** (links auto-expire after a configurable time, default 1 day),
@@ -82,6 +86,7 @@ Then open:
 
 - **Operator console:** http://localhost:8080/admin.html
 - **Customer view:**    http://localhost:8080/
+- **TV display:**       http://localhost:8080/display.html
 
 > The first build downloads and compiles the Rust dependencies, so it can take
 > a few minutes. Subsequent builds are cached and fast.
@@ -198,7 +203,7 @@ Public (no auth):
 | Method | Path                 | Description                                          |
 |--------|----------------------|------------------------------------------------------|
 | `GET`  | `/api/config`        | Branding + queue types + form fields.                |
-| `GET`  | `/api/state`         | Public "now serving" board for every type.           |
+| `GET`  | `/api/state`         | Public "now serving" board for every type, incl. the labels of up to the next 5 waiting guests (`next_waiting`). |
 | `GET`  | `/api/entries/:id`   | One guest's own status (no personal data).            |
 | `GET`  | `/api/events`        | **SSE** live-update stream.                           |
 | `GET`  | `/api/qr?data=...`   | QR code (SVG) for any text/URL.                       |
@@ -234,6 +239,7 @@ inline/
 ├── public/
 │   ├── index.html    # CUSTOMER app  (single file, themeable)
 │   ├── admin.html    # ADMIN app     (single file, themeable)
+│   ├── display.html  # TV DISPLAY app (single file, no auth)
 │   └── sw.js         # service worker (notifications + offline)
 ├── config.json       # your queue definition
 ├── cloudflare/       # Cloudflare Worker (edge apps + API proxy) + wrangler.toml
@@ -258,6 +264,11 @@ inline/
   production. See [CUSTOMIZE.md](CUSTOMIZE.md#production-hardening).
 - CORS is permissive by default for easy setup; tighten it if the customer app
   is served from the same origin (the default).
+- The Docker image runs as a non-root user (uid `10001`) and reports liveness
+  via `docker healthcheck` / `docker compose ps`. If you're upgrading an
+  existing deployment and your `./data` directory was created by an older,
+  root-running image, run `chown -R 10001 ./data` once so the container can
+  still write to it.
 
 ---
 

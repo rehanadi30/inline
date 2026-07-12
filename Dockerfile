@@ -21,11 +21,20 @@ RUN touch src/main.rs && cargo build --release ${FEATURES:+--features "$FEATURES
 FROM debian:bookworm-slim
 WORKDIR /app
 
+RUN useradd --system --uid 10001 --create-home --shell /usr/sbin/nologin appuser
+
 COPY --from=build /app/target/release/inline ./inline
 COPY public ./public
 COPY config.json ./config.json
 
+RUN mkdir -p /app/data && chown -R appuser:appuser /app
+
 ENV INLINE_BIND=0.0.0.0:8080
 EXPOSE 8080
+
+USER appuser
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD ["./inline", "healthcheck"]
 
 CMD ["./inline"]

@@ -2,6 +2,11 @@
 //! endpoints are unauthenticated; operator endpoints require the admin token
 //! when one is configured. See README.md for the full endpoint table.
 
+// Every handler here returns `Result<_, Response>` by design — the error
+// variant IS the ready-to-send HTTP response. That's idiomatic axum, not an
+// oversight, so silence clippy's "boxed error" suggestion for this file.
+#![allow(clippy::result_large_err)]
+
 use crate::store::Status;
 use crate::AppState;
 use axum::extract::{Path, Query, State};
@@ -32,11 +37,16 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), Response> {
         .and_then(|v| v.strip_prefix("Bearer "))
         .or_else(|| headers.get("x-admin-token").and_then(|v| v.to_str().ok()));
 
-    if provided == Some(expected.as_str()) {
-        Ok(())
-    } else {
-        Err((StatusCode::UNAUTHORIZED, "invalid or missing admin token").into_response())
+    match provided {
+        Some(p) if ct_eq(p.as_bytes(), expected.as_bytes()) => Ok(()),
+        _ => Err((StatusCode::UNAUTHORIZED, "invalid or missing admin token").into_response()),
     }
+}
+
+/// Constant-time byte comparison so token checks don't leak timing info about
+/// how many leading bytes matched. Only the token *length* is observable.
+fn ct_eq(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 /// Tell every connected browser "something changed; refresh your view".
@@ -62,7 +72,7 @@ pub async fn get_config(State(state): State<AppState>) -> Json<Value> {
 /// The public "now serving" board for every queue type.
 pub async fn get_state(State(state): State<AppState>) -> Json<Value> {
     let store = state.store.read().await;
-    Json(json!({ "state": store.state(&state.config) }))
+    Json(json!({ "state": store.state(&state.config, state.ticket_ttl_secs) }))
 }
 
 /// A single guest's own status — safe to expose, contains no personal data.
@@ -82,11 +92,8 @@ pub async fn events(State(state): State<AppState>) -> impl IntoResponse {
         .filter_map(|res| res.ok())
         .map(|msg| Ok::<Event, Infallible>(Event::default().data(msg)));
 
-    Sse::new(stream).keep_alive(
-        KeepAlive::new()
-            .interval(Duration::from_secs(25))
-            .text("keep-alive"),
-    )
+    Sse::new(stream)
+        .keep_alive(KeepAlive::new().interval(Duration::from_secs(25)).text("keep-alive"))
 }
 
 #[derive(Deserialize)]
@@ -118,7 +125,7 @@ pub async fn list_entries(State(state): State<AppState>, headers: HeaderMap) -> 
     let store = state.store.read().await;
     Ok(Json(json!({
         "entries": serde_json::to_value(&store.entries).unwrap_or(Value::Null),
-        "state": store.state(&state.config),
+        "state": store.state(&state.config, state.ticket_ttl_secs),
     })))
 }
 
@@ -139,11 +146,12 @@ pub async fn create_entry(
     authorize(&state, &headers)?;
 
     if !state.config.has_type(&req.type_code) {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            format!("unknown queue type '{}'", req.type_code),
-        )
+        return Err((StatusCode::BAD_REQUEST, format!("unknown queue type '{}'", req.type_code))
             .into_response());
+    }
+
+    if let Err(msg) = state.config.validate_fields(&req.fields) {
+        return Err((StatusCode::BAD_REQUEST, msg).into_response());
     }
 
     let entry = {
@@ -272,10 +280,98 @@ pub async fn import_data(
     authorize(&state, &headers)?;
     {
         let mut store = state.store.write().await;
-        store
-            .import_json(&body)
-            .map_err(|e| (StatusCode::BAD_REQUEST, format!("invalid backup: {e}")).into_response())?;
+        store.import_json(&body).map_err(|e| {
+            (StatusCode::BAD_REQUEST, format!("invalid backup: {e}")).into_response()
+        })?;
     }
     notify(&state);
     Ok(Json(json!({ "ok": true })))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::build_router;
+    use crate::config::Config;
+    use crate::store::Store;
+    use crate::AppState;
+    use axum::body::{to_bytes, Body};
+    use axum::http::{Request, StatusCode};
+    use serde_json::Value;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+    use tower::ServiceExt;
+
+    fn test_state(admin_token: Option<&str>) -> AppState {
+        AppState {
+            store: Arc::new(RwLock::new(Store::default())),
+            broker: Default::default(),
+            config: Arc::new(Config::default()),
+            public_url: String::new(),
+            admin_token: admin_token.map(str::to_string),
+            ticket_ttl_secs: 0,
+        }
+    }
+
+    async fn body_json(response: axum::response::Response) -> Value {
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null)
+    }
+
+    fn post_json(path: &str, token: Option<&str>, body: Value) -> Request<Body> {
+        let mut builder = Request::post(path).header("content-type", "application/json");
+        if let Some(t) = token {
+            builder = builder.header("authorization", format!("Bearer {t}"));
+        }
+        builder.body(Body::from(body.to_string())).unwrap()
+    }
+
+    #[tokio::test]
+    async fn create_entry_without_token_is_401() {
+        let router = build_router(test_state(Some("secret")));
+        let req =
+            post_json("/entries", None, serde_json::json!({ "type_code": "A", "fields": {} }));
+        let res = router.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn create_entry_missing_required_field_is_400() {
+        let router = build_router(test_state(None));
+        let req =
+            post_json("/entries", None, serde_json::json!({ "type_code": "A", "fields": {} }));
+        let res = router.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn create_then_get_public_entry_roundtrip() {
+        let router = build_router(test_state(None));
+        let create_req = post_json(
+            "/entries",
+            None,
+            serde_json::json!({ "type_code": "A", "fields": { "name": "Alice", "phone": "123" } }),
+        );
+        let create_res = router.clone().oneshot(create_req).await.unwrap();
+        assert_eq!(create_res.status(), StatusCode::OK);
+        let created = body_json(create_res).await;
+        let id = created["entry"]["id"].as_str().unwrap().to_string();
+
+        let get_req = Request::get(format!("/entries/{id}")).body(Body::empty()).unwrap();
+        let get_res = router.oneshot(get_req).await.unwrap();
+        assert_eq!(get_res.status(), StatusCode::OK);
+        let view = body_json(get_res).await;
+        assert!(
+            view.get("fields").is_none(),
+            "public entry view must never expose submitted fields"
+        );
+        assert!(view.get("label").is_some());
+    }
+
+    #[tokio::test]
+    async fn next_queue_unknown_type_is_400() {
+        let router = build_router(test_state(None));
+        let req = Request::post("/queue/Z/next").body(Body::empty()).unwrap();
+        let res = router.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    }
 }

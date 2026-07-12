@@ -8,7 +8,7 @@
 //
 // Bump CACHE after changing the apps to invalidate old caches.
 
-const CACHE = "inline-v1";
+const CACHE = "inline-v2";
 const SHELL = ["/", "/index.html", "/admin.html"];
 
 self.addEventListener("install", (event) => {
